@@ -12,5 +12,5 @@ export async function POST(request:Request){return api(async()=>{
   const parsed=createSchema.safeParse(await request.json());
   if(!parsed.success)throw new ApiError(400,'Use a guild name and a URL slug with lowercase letters, numbers and hyphens.');
   const result=await database<{id:string}>('guild_create',user,undefined,{...parsed.data,id:crypto.randomUUID(),state:defaultState});
-  return json(result,201,{'set-cookie':guildCookie(result.id,request)});
+  return json(result,201,{'set-cookie':guildCookie(result.id,request,user.userId)});
 },request);}

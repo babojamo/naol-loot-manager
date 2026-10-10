@@ -16,7 +16,9 @@ export async function identity() {
 export async function guildContext(request: Request) {
   checkMutation(request);
   const user = await identity();
-  const guildId = request.headers.get("cookie")?.match(/(?:^|;\s*)loot_manager_guild=([^;]+)/)?.[1];
+  const cookieName=`loot_manager_playground_${user.userId}`;
+  const cookie=request.headers.get("cookie")??"";
+  const guildId=cookie.split(";").map(v=>v.trim()).find(v=>v.startsWith(cookieName+"="))?.slice(cookieName.length+1)??cookie.match(/(?:^|;\s*)loot_manager_guild=([^;]+)/)?.[1];
   if (!guildId) throw new ApiError(409, "Choose a playground to continue.");
   if(!/^[a-f0-9-]{36}$/i.test(guildId)) throw new ApiError(403,'You do not have access to this playground.');
   const guild = await database<Guild>('guild_context',user,guildId);
@@ -32,8 +34,8 @@ export function checkMutation(request: Request) {
   const origin = request.headers.get('origin');
   if (origin && origin !== new URL(request.url).origin) throw new ApiError(403,'Use this website to make changes.');
 }
-export function guildCookie(id: string, request: Request) {
-  return `loot_manager_guild=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${new URL(request.url).protocol === 'https:' ? '; Secure' : ''}`;
+export function guildCookie(id: string, request: Request, userId: string) {
+  return `loot_manager_playground_${userId}=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${new URL(request.url).protocol === 'https:' ? '; Secure' : ''}`;
 }
 export function json(data: unknown, status = 200, extra: Record<string, string> = {}) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store", ...extra } });

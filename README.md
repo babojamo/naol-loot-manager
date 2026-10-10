@@ -4,15 +4,15 @@ Independent playground loot management. Uses the new Supabase project; the Stoic
 
 ## Setup
 
-Run `supabase/001_loot_manager.sql`, then `002_playgrounds_accounts_plans.sql`, `003_public_features.sql`, and `004_discord_and_plan_pauses.sql` in order. Keep `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SECRET_KEY` in Sites environment settings.
+Run `supabase/001_loot_manager.sql`, then `002_playgrounds_accounts_plans.sql`, `003_public_features.sql`, `004_discord_and_plan_pauses.sql`, `005_registration_and_settings.sql`, and `006_email_proof_guard.sql` in order. Keep `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SECRET_KEY` in Sites environment settings.
 
-Enable Supabase email/password registrations and email confirmation. Set Site URL to `https://loot-manager.lokwensio.com` and allow `https://loot-manager.lokwensio.com/auth/callback` and `https://loot-manager.kevinloquencio.chatgpt.site/auth/callback`. Configure custom SMTP in Supabase for public registration email delivery; the default mail service restricts recipient delivery.
+Enable Supabase email/password registrations and email confirmation. Set Site URL to `https://loot-manager.lokwensio.com` and allow `https://loot-manager.lokwensio.com/auth/callback` and `https://loot-manager.kevinloquencio.chatgpt.site/auth/callback`. Configure custom SMTP in Supabase for optional verification email delivery; the default mail service restricts recipient delivery.
 
 The initial platform administrator is the verified Supabase Auth account `kevin.loquencio@gmail.com`. Register and confirm that email before opening `/admin`. Other registrations do not receive administrator privileges.
 
 ## Accounts and playgrounds
 
-Register with email, password, name and a unique username at `/register`. Choose create or join at `/playgrounds`. Code-based joining requires owner approval; email invitations grant Manager access only to the invited registered email. Managers cannot manage users, roles, settings or deletion. Each playground has one Owner; all other users are Managers.
+Register with email, password, name and a unique username at `/register`. Registration creates a password-enabled account without sending a confirmation email. The app keeps independent email proof; `/playgrounds` shows a reminder and an explicit button to request a verification link. Opening that emailed link verifies the account. Password access alone never grants platform administrator privileges. Choose create or join at `/playgrounds`. The browser remembers the selected playground in an account-specific HttpOnly cookie for one year; membership is still verified on every request. The navigation links to the selected playground’s overview. Code-based joining requires owner approval; email invitations grant Manager access only to the invited registered email. Managers cannot manage users, roles, settings or deletion. Each playground has one Owner; all other users are Managers.
 
 Free: own 1 playground, create up to 5 current runs total, no managers. Elite: own 5 playgrounds, unlimited runs, up to 5 managers per playground. Legend: unlimited playgrounds, runs and managers. Joining other playgrounds does not consume the ownership allowance. Pending invitations reserve manager capacity.
 

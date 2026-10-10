@@ -19,7 +19,7 @@ export async function serverAuth(){
 }
 export async function getAccountUser():Promise<AccountUser|null>{
   const client=await serverAuth();const {data:{user},error}=await client.auth.getUser();
-  if(error||!user?.email||!user.email_confirmed_at)return null;
+  if(error||!user?.email)return null;
   return {userId:user.id,email:user.email,displayName:user.user_metadata?.name||user.email,fullName:user.user_metadata?.name??null};
 }
 export async function requireAccountUser(next?:string){const user=await getAccountUser();if(!user)redirect(next?`/login?next=${encodeURIComponent(next)}`:'/login');return user;}
