@@ -22,3 +22,5 @@
 .plan-request-dialog{z-index:1001}.naol-select-menu{z-index:1100}.sidebar-footer .sidebar-plan-request{color:#aeb1c0;font-weight:700}.sidebar-footer .sidebar-plan-request:hover{color:white}
 
 .plan-card li.plan-feature-excluded svg{color:#dc3545}
+
+.sale-modal .two-fields{align-items:start}.sale-modal .two-fields .field{align-content:start}.mailing-promotion figure{background:#f9f8f4;border:1px solid #e5e0ee;padding:18px}.mailing-promotion figcaption{color:#777185}.mailing-promotion img{border-radius:10px}@media(max-width:850px){.mailing-promotion figure{padding:12px}}
