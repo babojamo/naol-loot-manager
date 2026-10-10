@@ -1,0 +1,55 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const db=new PGlite();
+try{
+await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb);');
+for(const file of ['001_loot_manager.sql','002_playgrounds_accounts_plans.sql','003_public_features.sql','004_discord_and_plan_pauses.sql','005_registration_and_settings.sql','006_email_proof_guard.sql','007_naol_username_and_shop.sql','008_party_ai_limits.sql','009_admin_accounts.sql'])await db.exec(await readFile(new URL('../supabase/'+file,import.meta.url),'utf8'));
+const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const users=Array.from({length:45},(_,n)=>({id:uuid(n+1),email:n===0?'kevin.loquencio@gmail.com':`player${n}@example.com`}));
+for(const [n,user]of users.entries())await db.query('insert into auth.users values($1,$2,now(),$3)',[user.id,user.email,JSON.stringify({name:`Player ${n}`,username:`player${n}`})]);
+const [admin,target,other]=users;
+await db.query('update public.loot_manager_accounts set platform_admin=true where id=$1',[admin.id]);
+async function op(operation,actor,data={}){return(await db.query('select public.loot_manager_operation($1,$2::jsonb,null,$3::jsonb) result',[operation,JSON.stringify(actor),JSON.stringify(data)])).rows[0].result;}
+await db.exec('set role service_role');
+const first=await op('platform_users_page',admin,{page:1}),second=await op('platform_users_page',admin,{page:2}),last=await op('platform_users_page',admin,{page:3});
+assert.equal(first.users.length,20);assert.equal(first.total,45);assert.equal(second.users.length,20);assert.equal(last.users.length,5);assert.equal(new Set([...first.users,...second.users,...last.users].map(u=>u.id)).size,45);
+assert.equal((await op('platform_users_page',admin,{page:99})).page,3);
+assert.equal((await op('platform_users_page',admin,{query:'player44@'})).total,1);
+assert.equal((await op('platform_users_page',admin,{query:'%'})).total,0);
+assert.equal((await op('platform_users_page',target))._error.status,403);
+assert.equal((await op('platform_delete_check',admin,{userId:admin.id,confirmation:'player0'}))._error.status,400);
+assert.equal((await op('platform_delete_check',target,{userId:other.id,confirmation:'player2'}))._error.status,403);
+assert.equal((await op('platform_delete_check',admin,{userId:target.id,confirmation:'wrong'}))._error.status,400);
+assert.equal((await op('platform_delete_check',admin,{userId:target.id,confirmation:'player1'})).authUserId,target.id);
+await db.exec('reset role');
+const owned=uuid(100),shared=uuid(101);
+await db.query("insert into public.loot_manager_guilds(id,name,slug) values($1,'Owned','owned'),($2,'Other owner','shared')",[owned,shared]);
+await db.query("insert into public.loot_manager_guild_users(guild_id,user_id,role) values($1,$3,'owner'),($2,$3,'manager'),($2,$4,'owner'),($1,$4,'manager')",[owned,shared,target.id,other.id]);
+await db.query("insert into public.loot_manager_ledgers(guild_id,payload) values($1,'{\"runs\":[{\"id\":\"owned-run\"}]}'),($2,'{\"runs\":[{\"id\":\"preserve-run\"}]}')",[owned,shared]);
+await db.query("insert into public.loot_manager_join_requests(guild_id,user_id) values($1,$2)",[shared,target.id]);
+await db.query("insert into public.loot_manager_invites(id,guild_id,email,role,token_hash,created_by,used_by,expires_at) values($1,$2,'test@example.com','manager','test',$3,$4,now())",[uuid(102),shared,other.id,target.id]);
+await db.query("insert into public.loot_manager_party_reads(user_id,guild_id,image_hash) values($1,$2,'test'),($3,$4,'test')",[target.id,shared,other.id,owned]);
+await db.query("insert into public.loot_manager_discord_outbox(guild_id,version,part,content) values($1,1,0,'test')",[owned]);
+await db.exec('create table public.loot_manager_import_backups(guild_id uuid,payload jsonb)');
+await db.query("insert into public.loot_manager_import_backups values($1,'{}'),($2,'{}')",[owned,shared]);
+// Simulate an unrelated FK failure to prove the Auth deletion rolls back cleanup.
+await db.exec('create table public.cleanup_failure(user_id text references public.loot_manager_accounts(id))');
+await db.query('insert into public.cleanup_failure values($1)',[target.id]);
+await assert.rejects(()=>db.query('delete from auth.users where id=$1',[target.id]),/foreign key/);
+assert.equal((await db.query('select count(*)::int n from public.loot_manager_guilds where id=$1',[owned])).rows[0].n,1);
+await db.exec('drop table public.cleanup_failure');
+await db.query('delete from auth.users where id=$1',[target.id]);
+assert.equal((await db.query('select count(*)::int n from public.loot_manager_accounts where id=$1',[target.id])).rows[0].n,0);
+assert.equal((await db.query('select count(*)::int n from public.loot_manager_guilds')).rows[0].n,1);
+assert.deepEqual((await db.query('select payload from public.loot_manager_ledgers where guild_id=$1',[shared])).rows[0].payload,{runs:[{id:'preserve-run'}]});
+assert.equal((await db.query('select used_by from public.loot_manager_invites')).rows[0].used_by,null);
+for(const table of ['loot_manager_party_reads','loot_manager_discord_outbox','loot_manager_join_requests'])assert.equal((await db.query(`select count(*)::int n from public.${table}`)).rows[0].n,0);
+assert.deepEqual((await db.query('select guild_id from public.loot_manager_import_backups')).rows.map(x=>x.guild_id),[shared]);
+assert.equal((await db.query('select count(*)::int n from public.loot_manager_guild_users where user_id=$1',[other.id])).rows[0].n,1);
+await assert.rejects(()=>db.query('delete from auth.users where id=$1',[admin.id]),/last active platform administrator/);
+await db.exec('set role authenticated');
+await assert.rejects(()=>op('platform_users_page',admin),/permission denied/);
+await assert.rejects(()=>op('platform_delete_check',admin,{userId:other.id,confirmation:'player2'}),/permission denied/);
+console.log('PASS: 20-account pagination and search, admin-only deletion and typed confirmation, owned-only cleanup, retained other playgrounds and history, atomic rollback, protected administrator and browser access.');
+}catch(error){console.error(error.message);process.exitCode=1;}finally{await db.close();}
