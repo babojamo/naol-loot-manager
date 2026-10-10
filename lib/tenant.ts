@@ -3,7 +3,7 @@ import { database } from './supabase-store';
 import type { AccountUser } from './account-auth';
 import type { LootState } from "./types";
 
-export type Guild = { id: string; name: string; slug: string; description: string; is_public: number; role?: string };
+export type Guild = { icon?:string|null; id: string; name: string; slug: string; description: string; is_public: number; role?: string };
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }

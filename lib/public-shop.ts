@@ -1,6 +1,6 @@
 import type {LootState} from './types';
 import {lootImageFor} from './loot-images';
-export type ShopPlayground={name:string;slug:string;description:string;inquiries_enabled?:boolean};
+export type ShopPlayground={icon?:string|null;name:string;slug:string;description:string;inquiries_enabled?:boolean};
 export function publicShopItems(state:LootState,playground:ShopPlayground){
   const inventory=new Map<string,{name:string;collected:number;sold:number}>();
   for(const run of state.runs)for(const loot of run.loots){const key=loot.name.trim().toLowerCase();const item=inventory.get(key)??{name:loot.name.trim(),collected:0,sold:0};item.collected+=Number(loot.quantity);inventory.set(key,item);}

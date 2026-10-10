@@ -1,4 +1,5 @@
 "use client";
+import {PlaygroundIcon} from './playground-icon';
 import {StyledSelect} from "./styled-select";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -331,14 +332,14 @@ async function preparePartyImage(file: File): Promise<string> {
   } finally { bitmap.close(); }
 }
 
-function Logo({ name = "NAOL" }: { name?: string }) {
-  return <a className="brand" href="/"><span className="brand-mark naol-mark"><img src="/brand/naol-logo.png" alt="NAOL"/></span><div><strong>{name}</strong><small>NAOL</small></div></a>;
+function Logo({ name = "NAOL",icon }: { name?: string;icon?:string|null }) {
+  return <a className="brand" href="/"><PlaygroundIcon icon={icon} name={name}/><div><strong>{name}</strong><small>NAOL</small></div></a>;
 }
 
 export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: Tab }) {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [currentUser, setCurrentUser] = useState("");
-  const [currentGuild, setCurrentGuild] = useState<{ id: string; name: string; slug: string } | null>(null);
+  const [currentGuild, setCurrentGuild] = useState<{ id: string; name: string; slug: string;icon?:string|null } | null>(null);
   const guildIdRef = useRef("");
   const versionRef = useRef(0);
   const savingRef = useRef(false);
@@ -427,7 +428,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
   return (
     <main className="app-shell">
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
-        <div className="sidebar-top"><Logo name={currentGuild?.name} /><button className="icon-button close-nav" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
+        <div className="sidebar-top"><Logo name={currentGuild?.name} icon={currentGuild?.icon}/><button className="icon-button close-nav" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
         <PlaygroundSwitcher currentId={currentGuild?.id} disabled={saving||showRun||showSale}/><nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}<a href={`/shop?playground=${currentGuild?.slug ?? ""}`}><Store size={18}/><span>Public shop</span></a><a href={`/inquiries?playground=${currentGuild?.slug ?? ""}`}><Search size={18}/><span>Public inquiries</span></a></nav>
         <div className="sidebar-note"><Sparkles size={16} /><div><strong>Fair payout queue</strong><span>Oldest waiting member is shown first.</span></div></div>
         <div className="sidebar-footer"><a href="/guide"><Sparkles size={17}/><span>App guide</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>

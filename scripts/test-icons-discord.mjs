@@ -1,0 +1,44 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {deliverDiscord} from '../lib/discord-delivery.ts';
+const db=new PGlite();
+try{
+await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb);');
+for(const file of ['001_loot_manager.sql','002_playgrounds_accounts_plans.sql','003_public_features.sql','004_discord_and_plan_pauses.sql','005_registration_and_settings.sql','006_email_proof_guard.sql','007_naol_username_and_shop.sql','008_party_ai_limits.sql','009_admin_accounts.sql','010_icons_discord_delivery.sql'])await db.exec(await readFile(new URL('../supabase/'+file,import.meta.url),'utf8'));
+const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const owner={id:uuid(1),email:'owner@example.com'},manager={id:uuid(2),email:'manager@example.com'},guild=uuid(10);
+for(const [i,user]of [owner,manager].entries())await db.query('insert into auth.users values($1,$2,now(),$3)',[user.id,user.email,JSON.stringify({name:'Test User',username:`test${i}`})]);
+await db.query("update public.loot_manager_accounts set plan='Elite' where id=$1",[owner.id]);
+await db.query("insert into public.loot_manager_guilds(id,name,slug,shop_enabled,inquiries_enabled,discord_enabled,discord_webhook_url) values($1,'Test','test',true,true,true,'https://discord.com/api/webhooks/123/test')",[guild]);
+await db.query("insert into public.loot_manager_guild_users(guild_id,user_id,role) values($1,$2,'owner'),($1,$3,'manager')",[guild,owner.id,manager.id]);
+await db.query("insert into public.loot_manager_ledgers(guild_id,payload) values($1,'{\"members\":[],\"runs\":[],\"sales\":[],\"auditLog\":[]}')",[guild]);
+async function op(operation,user=owner,data={}){return(await db.query('select public.loot_manager_operation($1,$2::jsonb,$3,$4::jsonb) result',[operation,user?JSON.stringify(user):null,guild,JSON.stringify(data)])).rows[0].result;}
+await db.exec('set role service_role');
+const icon='data:image/webp;base64,UklGRgAAAAAAWEBP';
+assert.equal((await op('guild_icon_update',manager,{icon}))._error.status,403);
+assert.equal((await op('guild_icon_update',owner,{icon:'data:image/svg+xml;base64,abc'}))._error.status,400);
+await op('guild_icon_update',owner,{icon});
+assert.equal((await op('guild_context')).icon,icon);
+assert.equal((await op('guild_list')).guilds[0].icon,icon);
+assert.equal((await op('public_list',null,{feature:'shop'}))[0].icon,icon);
+assert.equal((await op('public_shop',null))[0].guild.icon,icon);
+assert.equal((await op('settings_get')).guild.icon,icon);
+assert.equal((await op('settings_get')).guild.discord_webhook_url,undefined);
+await op('guild_icon_update',owner,{icon:null});assert.equal((await op('guild_context')).icon,null);
+assert.equal((await op('discord_status')).pending,false);
+await op('discord_test');assert.equal((await op('discord_test'))._error.status,429);
+let job=await op('discord_claim');assert.ok(job.content.startsWith('NAOL connection test'));
+assert.equal(await op('discord_claim'),null);assert.equal((await op('discord_status')).pending,true);
+await op('discord_ack',owner,{id:job.id,claim:job.claim,success:false,error:'Rate limited',retrySeconds:120});
+assert.equal((await op('discord_status')).error,'Rate limited');assert.equal(await op('discord_claim'),null);
+await op('discord_config',owner,{enabled:true,webhookUrl:'https://discord.com/api/webhooks/123/replaced',clear:false});
+job=await op('discord_claim');assert.ok(job);await op('discord_ack',owner,{id:job.id,claim:job.claim,success:true});assert.equal((await op('discord_status')).pending,false);
+await db.exec('reset role;set role authenticated');await assert.rejects(()=>op('guild_icon_update',owner,{icon}),/permission denied/);await assert.rejects(()=>op('discord_status'),/permission denied/);
+let calls=0;
+const success=await deliverDiscord('https://discord.com/api/webhooks/123/test','Test',async(url,init)=>{calls++;assert.equal(url.searchParams.get('wait'),'true');assert.ok(init.headers['User-Agent'].startsWith('DiscordBot'));assert.deepEqual(JSON.parse(init.body).allowed_mentions,{parse:[]});return new Response('{}',{status:200});});assert.equal(success.success,true);
+const limited=await deliverDiscord('https://discord.com/api/webhooks/123/test','Test',async()=>new Response('{"retry_after":2.7}',{status:429}));assert.equal(limited.retrySeconds,3);
+const missing=await deliverDiscord('https://discord.com/api/webhooks/123/test','Test',async()=>new Response('{}',{status:404}));assert.match(missing.error,/deleted/);
+const invalid=await deliverDiscord('https://example.com/secret','Test',async()=>{calls++;});assert.equal(invalid.success,false);assert.equal(calls,1);
+console.log('PASS: icon owner permissions, fallback and public projections; durable Discord queue, lease/cooldown truth, new webhook retry, confirmed sends, rate limits and safe errors.');
+}catch(e){console.error(e.message);process.exitCode=1;}finally{await db.close();}
