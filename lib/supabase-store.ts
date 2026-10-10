@@ -1,0 +1,25 @@
+import { env } from 'cloudflare:workers';
+import { ApiError } from './tenant';
+import type { ChatGPTUser } from '../app/chatgpt-auth';
+
+type Operation='account'|'guild_list'|'guild_create'|'guild_context'|'ledger_get'|'ledger_save'|'settings_get'|'settings_update'|'invite_create'|'invite_accept'|'invite_revoke'|'team_remove'|'public_list'|'public_guild'|'public_ledger';
+export async function database<T=Record<string,unknown>>(operation:Operation,user?:ChatGPTUser,guildId?:string,data:unknown={}):Promise<T>{
+  const url=env.NEXT_PUBLIC_SUPABASE_URL;
+  const secret=env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url || !secret) throw new ApiError(503,'Supabase setup is incomplete. Configure the server key in the site environment.');
+  const target=new URL('/rest/v1/rpc/loot_manager_operation',url);
+  if(target.protocol!=='https:') throw new ApiError(503,'Supabase requires a secure project URL.');
+  let response:Response;
+  try {
+    response=await fetch(target,{method:'POST',headers:{apikey:secret,...(secret.startsWith('eyJ')?{authorization:`Bearer ${secret}`}:{}) ,'content-type':'application/json'},body:JSON.stringify({p_operation:operation,p_actor:user?{id:user.userId,email:user.email,name:user.displayName}:null,p_guild_id:guildId??null,p_data:data}),signal:AbortSignal.timeout(15000)});
+  } catch {throw new ApiError(503,'The guild database is temporarily unavailable. Please try again.');}
+  if(!response.ok) {
+    if(response.status===404) throw new ApiError(503,'Run the Loot Manager SQL migration in the new Supabase project.');
+    if(response.status===401 || response.status===403) throw new ApiError(503,'Supabase server access is not configured correctly. Check the server key and migration.');
+    console.error('Supabase operation failed',operation,response.status);
+    throw new ApiError(503,'The guild database is temporarily unavailable. Please try again.');
+  }
+  const result=await response.json() as T & {_error?:{status:number;message:string}};
+  if(result?._error) throw new ApiError(result._error.status,result._error.message);
+  return result;
+}

@@ -13,7 +13,7 @@ const { d1, r2 } = hostingConfig;
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const managedLinux = readExecutionProfile() === "managed-linux";
-const applicationVariableNames: string[] = [];
+const applicationVariableNames: string[] = ['NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY','SUPABASE_SECRET_KEY','SUPABASE_SERVICE_ROLE_KEY'];
 const localApplicationVariables = Object.fromEntries(
   applicationVariableNames.flatMap((key) => process.env[key] ? [[key, process.env[key]]] : []),
 );

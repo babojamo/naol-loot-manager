@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { api, db, guildContext, json, ledger, ApiError } from '../../../lib/tenant';
+import { api, guildContext, json, ledger, ApiError } from '../../../lib/tenant';
+import { database } from '../../../lib/supabase-store';
 import { stateSchema } from '../../../lib/state-validation';
 function canonical(value: unknown): string {
   if(Array.isArray(value)) return '['+value.map(canonical).join(',')+']';
@@ -7,8 +8,8 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? 'null';
 }
 export async function GET(request: Request) { return api(async () => {
-  const {guild}=await guildContext(request);
-  const data=await ledger(guild.id);
+  const {guild,user}=await guildContext(request);
+  const data=await ledger(guild.id,user);
   return json({...data,guildId:guild.id,connected:true});
 },request); }
 export async function PUT(request: Request) { return api(async () => {
@@ -19,7 +20,7 @@ export async function PUT(request: Request) { return api(async () => {
   const parsed=z.object({guildId:z.string(),version:z.number().int().nonnegative(),action:z.string().max(200),state:stateSchema}).safeParse(JSON.parse(text));
   if(!parsed.success) throw new ApiError(400,parsed.error.issues[0]?.message ?? 'Check the ledger data.');
   if(parsed.data.guildId!==guild.id) throw new ApiError(409,'Your active guild changed in another tab. Reload before saving.');
-  const previous=await ledger(guild.id);
+  const previous=await ledger(guild.id,user);
   if(previous.version!==parsed.data.version) throw new ApiError(409,'Another manager saved changes. Reload the ledger before trying again.');
   const next=parsed.data.state;
   for(const sale of previous.state.sales) {
@@ -34,8 +35,6 @@ export async function PUT(request: Request) { return api(async () => {
   const now=new Date().toISOString();
   next.auditLog=[{id:crypto.randomUUID(),username:user.displayName,action:parsed.data.action,createdAt:now},...previous.state.auditLog].slice(0,100);
   next.lastUpdatedBy=user.displayName; next.lastUpdatedAt=now;
-  const result=await db().prepare('UPDATE guild_ledgers SET payload=?,version=version+1,updated_at=? WHERE guild_id=? AND version=?')
-    .bind(JSON.stringify(next),now,guild.id,parsed.data.version).run();
-  if(!result.meta.changes) throw new ApiError(409,'Another manager saved changes. Reload the ledger before trying again.');
+  await database('ledger_save',user,guild.id,{state:next,version:parsed.data.version});
   return json({ok:true,state:next,version:parsed.data.version+1,guildId:guild.id});
 },request); }

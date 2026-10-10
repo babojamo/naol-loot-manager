@@ -1,5 +1,6 @@
-import { api, db, json } from "../../../lib/tenant";
+import { api, json } from "../../../lib/tenant";
+import { database } from '../../../lib/supabase-store';
 export async function GET(request: Request) { return api(async () => {
-  const { results } = await db().prepare('SELECT name,slug,description FROM guilds WHERE is_public=1 ORDER BY name LIMIT 200').all();
+  const results = await database('public_list');
   return json({ guilds: results });
 },request); }

@@ -1,21 +1,28 @@
 # Loot Manager
 
-A separate multi-tenant guild loot application. This project has its own Sites project, source repository and D1 database. It does not import or alter the Stoics production site.
+This independent multi-tenant guild loot application uses a separate Supabase project. The existing Stoics website and database are not modified.
+
+## Supabase setup
+
+1. Run `supabase/001_loot_manager.sql` in the new project's SQL Editor.
+2. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in Sites environment settings.
+3. Add `SUPABASE_SECRET_KEY` as a secret (or legacy `SUPABASE_SERVICE_ROLE_KEY`). Never use a `NEXT_PUBLIC_` name for the server key.
+4. Publish after the migration and server secret are configured. Updating runtime variables requires a deployment to apply them.
+
+Sites still hosts the website and provides ChatGPT sign-in. Supabase stores the guild records. The publishable key alone cannot authorize these server operations because ChatGPT identity is not a Supabase Auth JWT.
+
+All application tables use the `loot_manager_` prefix with RLS enabled and direct access revoked from `anon` and `authenticated`. Only the backend's server key can call the operation function. The application and SQL function verify guild membership and role. Create-guild and accept-invitation operations are atomic. Ledger updates use an expected version so concurrent changes cannot silently overwrite each other.
+
+The server key is used only for Supabase HTTPS requests; it is never sent to the browser or placed in a build manifest. No old credentials or webhook URLs are copied. No automatic fallback to D1 is implemented.
 
 ## Use
 
-Sign in with ChatGPT at `/login`, create a guild at `/guilds`, and invite managers using their account email in `/settings`. Invitation links expire after seven days; share them yourself. Owners can invite admins; owners and admins can invite managers and revoke access. A person can belong to multiple guilds and switch workspaces.
+Sign in at `/login`, create or select a guild at `/guilds`, then invite managers using their ChatGPT account email in `/settings`. Share the generated invitation link yourself. Links expire after seven days. Owners can invite admins; owners and admins can invite managers and revoke access.
 
-The protected ledger pages are `/overview`, `/dungeon-runs`, `/loot-inventory`, `/sales`, `/statistics` and `/member-search`. Each guild starts with an empty ledger. Guild settings let an owner or admin publish `/shop?guild=<slug>` and `/inquiries?guild=<slug>`. Private guilds do not appear in the public directory. There is no member showcase page.
+Protected pages are `/overview`, `/dungeon-runs`, `/loot-inventory`, `/sales`, `/statistics` and `/member-search`. Published guilds have `/shop?guild=<slug>` and `/inquiries?guild=<slug>`. Private guilds do not appear in the public directory. There is no member showcase page. Hosting audience controls are separate from guild publication.
 
-## Isolation
+## Development and validation
 
-Every protected request checks the platform-authenticated user against the selected guild's membership. State changes include both guild ID and ledger version, protecting against stale updates and guild changes in another tab. Settings mutations carry the expected guild ID. Invitations store only a token hash and require the invited email. Recorded sales and runs containing sold loot cannot be rewritten. Public routes expose only published guild stock and player rewards.
+`npm ci`, `npm run test:supabase`, `npx tsc --noEmit` and `npm run build` validate the project. The PostgreSQL tests use an in-memory PGlite database, not production. `node --experimental-strip-types --test lib/run-party.test.mjs` checks run-specific member edits. `scripts/test-tenancy.mjs` exercises a local app with a separate disposable Supabase project and refuses non-local application URLs.
 
-No original account credentials, player data, Discord webhook or media files were copied. Site audience controls are separate from the per-guild publication setting; the hosting audience must allow visitors before other guild users can sign in.
-
-## Development
-
-Run `npm ci`, `npm run build`, then apply the generated Drizzle SQL to the local D1 database and run `npm start -- --port 4179`. `node scripts/test-tenancy.mjs` checks access controls against that local server with disposable fixtures. It refuses non-local targets. `node --experimental-strip-types --test lib/run-party.test.mjs` covers run-specific member edits.
-
-Production migrations are packaged under `drizzle/`; production starts empty. Sites owns authenticated request headers in production. Local test headers are only a testing mechanism and must never be implemented as public login fields.
+Local runtime configuration comes from ignored `.env` files. Production configuration is stored in Sites environment variables. Apply the SQL migration in Supabase; Sites does not apply it automatically.
