@@ -6,7 +6,7 @@ Where every drop makes someone jealous. Independent playground loot management. 
 
 Run `supabase/001_loot_manager.sql`, then `002_playgrounds_accounts_plans.sql`, `003_public_features.sql`, `004_discord_and_plan_pauses.sql`, `005_registration_and_settings.sql`, `006_email_proof_guard.sql`, and `007_naol_username_and_shop.sql` in order. Keep `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SECRET_KEY` in Sites environment settings.
 
-Enable Supabase email/password registrations and email confirmation. Set Site URL to `https://loot-manager.lokwensio.com` and allow `https://loot-manager.lokwensio.com/auth/callback` and `https://loot-manager.kevinloquencio.chatgpt.site/auth/callback`. Configure custom SMTP in Supabase for optional verification email delivery; the default mail service restricts recipient delivery.
+Enable Supabase email/password registrations and email confirmation. Set Site URL to `https://naol.lokwensio.com` and allow `https://naol.lokwensio.com/auth/callback` and `https://loot-manager.kevinloquencio.chatgpt.site/auth/callback`. Configure custom SMTP in Supabase for optional verification email delivery; the default mail service restricts recipient delivery.
 
 The initial platform administrator is the verified Supabase Auth account `kevin.loquencio@gmail.com`. Register and confirm that email before opening `/admin`. Other registrations do not receive administrator privileges.
 
@@ -33,3 +33,7 @@ All application tables have RLS enabled and direct browser access revoked. Serve
 `npm ci`, `node scripts/test-playgrounds.mjs`, `npx tsc --noEmit`, `npm run build`. SQL tests run in disposable in-memory PostgreSQL using PGlite. Production migrations are applied manually in Supabase, not by Sites deployment.
 
 NAOL branding uses the supplied golden emblem in the header, footer, dashboard and page previews. `/guide` explains account setup, playgrounds, runs, inventory, salary recording, public features and Discord. `/shop` lists every enabled public playground’s loot by default; playground and loot-name filters narrow the stock without exposing private ledgers. Usernames allow any trimmed 3–30-character value, with case-insensitive uniqueness.
+
+## Party screenshots
+Run `supabase/008_party_ai_limits.sql` after 007. Set server-only secret `OPENAI_API_KEY` in Sites. Party images use the Responses API with `gpt-6-luna`, reasoning disabled, high image detail and a 600-output-token limit. Only the names-only extraction is requested, with no tools, automatic retries, or expensive-model fallback. The browser preserves image colors and prepares PNGs bounded to 1600px / 1 megapixel. The server verifies size, dimensions, current playground membership and Manager/Owner access before any charge. Review names before saving; exact matches reuse player IDs, with no fuzzy merging of similar players.
+Durable quotas: 25 attempted reads per account per UTC day, 1000 across the site. A repeated image in the same account/playground/day is cached without another request. Failures also consume quota. Only image hashes and name results are cached for at most three days; screenshots are sent to OpenAI with store:false and are not saved in Supabase. No key or provider response is returned to the browser.

@@ -9,7 +9,7 @@ export const metadata={title:'Sign in',robots:{index:false,follow:false}};
 export default async function Login({searchParams}:{searchParams:Promise<{next?:string;confirmation?:string}>}){
   const params=await searchParams;const next=params.next?.startsWith('/join?token=')?params.next:'/playgrounds';
   if(await getAccountUser()){
-    let path=next;try{await guildContext(new Request('https://loot-manager.lokwensio.com/login',{headers:await headers()}));if(next==='/playgrounds')path='/overview';}catch(e){if(!(e instanceof ApiError))throw e;}redirect(path);
+    let path=next;try{await guildContext(new Request('https://naol.lokwensio.com/login',{headers:await headers()}));if(next==='/playgrounds')path='/overview';}catch(e){if(!(e instanceof ApiError))throw e;}redirect(path);
   }
   return <main className="marketing"><SiteNav/><section className="access-page"><div className="access-copy"><span className="lm-eyebrow">YOUR NEXT ADVENTURE STARTS HERE</span><h1>Every drop.<br/><em>One workspace.</em></h1><p>Your playgrounds, your party, your rewards. Together in one place.</p>{params.confirmation==='failed'&&<p role="alert">This confirmation link could not be completed. Try signing in if your email is already verified.</p>}</div><AccountForm returnTo={next}/></section><SiteFooter/></main>;
 }

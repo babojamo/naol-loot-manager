@@ -1,4 +1,5 @@
 "use client";
+import {StyledSelect} from "./styled-select";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -311,81 +312,23 @@ function estimatedPendingSalaryForMember(state: LootState, memberId: string, loo
   return totalCents / 100;
 }
 
-function memberNameKey(name: string) {
-  return name.normalize("NFKC").trim().toLowerCase().replace(/[il1|]/g, "i").replace(/[^\p{L}\p{N}]/gu, "");
-}
+function memberNameKey(name: string) { return name.trim().normalize("NFC"); }
 
-function recognizedNames(text: string) {
-  const blocked = /^(party|member|leader|level|guild|hp|mp|flyff|universe|invite|leave)$/i;
-  return text.split(/\r?\n/)
-    .map((line) => line.normalize("NFKC").trim().replace(/[^\p{L}\p{N}_\- ]/gu, "").replace(/\s+/g, ""))
-    .filter((line) => line.length >= 3 && line.length <= 22 && !blocked.test(line) && !/^\d+$/.test(line));
-}
-
-function nameDistance(left: string, right: string) {
-  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
-    let diagonal = previous[0];
-    previous[0] = leftIndex;
-    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
-      const above = previous[rightIndex];
-      previous[rightIndex] = left[leftIndex - 1] === right[rightIndex - 1]
-        ? diagonal
-        : Math.min(diagonal, previous[rightIndex - 1], above) + 1;
-      diagonal = above;
-    }
-  }
-  return previous[right.length];
-}
-
-function namesAreSimilar(left: string, right: string) {
-  const first = memberNameKey(left);
-  const second = memberNameKey(right);
-  if (!first || !second) return false;
-  const allowedChanges = Math.max(1, Math.floor(Math.max(first.length, second.length) * .24));
-  return nameDistance(first, second) <= allowedChanges;
-}
-
-function mergeNameReadings(original: string[], enhanced: string[]) {
-  const merged: string[] = [];
-  for (const name of [...original, ...enhanced]) {
-    if (!merged.some((candidate) => namesAreSimilar(candidate, name))) merged.push(name);
-  }
-  return merged.slice(0, 8);
-}
-
-async function preparePartyImage(file: File): Promise<Blob> {
+async function preparePartyImage(file: File): Promise<string> {
+  if (!file.type.startsWith("image/") || file.size > 12_000_000) throw new Error("Choose an image under 12 MB and crop it to the party list.");
+  const bitmap = await createImageBitmap(file);
   try {
-    const bitmap = await createImageBitmap(file);
-    const source = document.createElement("canvas");
-    source.width = bitmap.width;
-    source.height = bitmap.height;
-    const sourceContext = source.getContext("2d", { willReadFrequently: true });
-    if (!sourceContext) return file;
-    sourceContext.drawImage(bitmap, 0, 0);
-    const pixels = sourceContext.getImageData(0, 0, source.width, source.height);
-    for (let index = 0; index < pixels.data.length; index += 4) {
-      const peak = Math.max(pixels.data[index], pixels.data[index + 1], pixels.data[index + 2]);
-      const value = peak > 24 ? 0 : 255;
-      pixels.data[index] = value;
-      pixels.data[index + 1] = value;
-      pixels.data[index + 2] = value;
-      pixels.data[index + 3] = 255;
-    }
-    sourceContext.putImageData(pixels, 0, 0);
-    bitmap.close();
-
-    const output = document.createElement("canvas");
-    output.width = source.width * 3;
-    output.height = source.height * 3;
-    const outputContext = output.getContext("2d");
-    if (!outputContext) return file;
-    outputContext.imageSmoothingEnabled = false;
-    outputContext.drawImage(source, 0, 0, output.width, output.height);
-    return await new Promise<Blob>((resolve, reject) => output.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Image preparation failed")), "image/png"));
-  } catch {
-    return file;
-  }
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height), Math.sqrt(1_000_000 / (bitmap.width * bitmap.height)));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.floor(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.floor(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not prepare the screenshot.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const image = canvas.toDataURL("image/png");
+    if (image.length > 1_400_000) throw new Error("Crop the screenshot to the party list, then paste it again.");
+    return image;
+  } finally { bitmap.close(); }
 }
 
 function Logo({ name = "NAOL" }: { name?: string }) {
@@ -511,7 +454,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
         </div>
       </section>
 
-      {showRun && <RunModal state={state} run={editingRun ?? undefined} currentUser={currentUser} onClose={() => { setShowRun(false); setEditingRun(null); }} onSave={(next) => { void persist(next, editingRun ? `Edited ${editingRun.dungeon}` : "Added a dungeon run"); setShowRun(false); setEditingRun(null); navigateToTab("runs"); }} />}
+      {showRun && <RunModal state={state} guildId={currentGuild?.id ?? ""} run={editingRun ?? undefined} currentUser={currentUser} onClose={() => { setShowRun(false); setEditingRun(null); }} onSave={(next) => { void persist(next, editingRun ? `Edited ${editingRun.dungeon}` : "Added a dungeon run"); setShowRun(false); setEditingRun(null); navigateToTab("runs"); }} />}
       {showSale && <SaleModal state={state} inventory={inventory} initialLootName={saleLootName} currentUser={currentUser} onClose={() => { setShowSale(false); setSaleLootName(""); }} onSave={(next) => { void persist(next, "Recorded a batch sale and salaries"); setShowSale(false); setSaleLootName(""); navigateToTab("settlements"); }} />}
     </main>
   );
@@ -668,7 +611,7 @@ function LootPhotoEditor({ name, image, rune, onChange }: { name: string; image:
     catch (problem) { setError(problem instanceof Error ? problem.message : "Could not use that image."); }
     finally { setBusy(false); }
   };
-  return <div className="loot-photo-editor" tabIndex={0} onPaste={(event) => { const file = [...event.clipboardData.files].find((candidate) => candidate.type.startsWith("image/")); if (file) { event.preventDefault(); void handleFile(file); } }} aria-label={`Photo for ${name}. Paste an image here or browse.`}><button type="button" className={`stock-icon rune-${rune} ${image ? "has-image" : ""}`} onClick={() => inputRef.current?.click()} aria-label={`Browse for ${name} photo`}>{busy ? <LoaderCircle className="spin" /> : image ? <img src={image} alt={`${name} loot item`} /> : <Gem />}</button><button type="button" className="loot-photo-browse" onClick={() => inputRef.current?.click()}><ImagePlus size={13} /> {image ? "Replace" : "Add photo"}</button><small>{error || "Paste here or browse"}</small><input ref={inputRef} hidden type="file" accept="image/*" onChange={(event) => { void handleFile(event.target.files?.[0]); event.currentTarget.value = ""; }} /></div>;
+  return <div className="loot-photo-editor" tabIndex={0} onPaste={(event) => { const file = [...event.clipboardData.files].find((candidate) => candidate.type.startsWith("image/")); if (file) { event.preventDefault(); void handleFile(file); } }} aria-label={`Photo for ${name}. Paste an image here or browse.`}><button type="button" className={`stock-icon rune-${rune} ${image ? "has-image" : ""}`} onClick={() => inputRef.current?.click()} aria-label={`Browse for ${name} photo`}>{busy ? <LoaderCircle className="spin" /> : image ? <img src={image} alt={`${name} loot item`} /> : <Gem />}</button><button type="button" className="loot-photo-browse" onClick={() => inputRef.current?.click()}><ImagePlus size={13} /> {image ? "Replace" : "Add photo"}</button><small>{error || "Paste here or browse"}</small><input ref={inputRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { void handleFile(event.target.files?.[0]); event.currentTarget.value = ""; }} /></div>;
 }
 
 function VendingPriceInput({ value, onCommit }: { value: number; onCommit: (value: number) => void }) {
@@ -727,17 +670,19 @@ function MemberSearch({ state }: { state: LootState }) {
   </>;
 }
 
-function RunModal({ state, run, currentUser, onClose, onSave }: { state: LootState; run?: DungeonRun; currentUser: string; onClose: () => void; onSave: (state: LootState) => void }) {
+function RunModal({ state, run, currentUser, guildId, onClose, onSave }: { state: LootState; guildId: string; run?: DungeonRun; currentUser: string; onClose: () => void; onSave: (state: LootState) => void }) {
   const [dungeon, setDungeon] = useState(run?.dungeon ?? "Dekane Mine");
   const [createdAt, setCreatedAt] = useState(() => toDateTimeLocalValue(run ? new Date(run.createdAt) : new Date()));
   const [members, setMembers] = useState<Member[]>(run ? run.memberIds.map((id) => state.members.find((member) => member.id === id)).filter((member): member is Member => Boolean(member)) : []);
   const [selected, setSelected] = useState<string[]>(run?.memberIds ?? []);
   const [loots, setLoots] = useState<RunLoot[]>(run ? run.loots.map((loot) => ({ ...loot })) : [{ id: makeId(), name: "", quantity: 1 }]);
   const [reading, setReading] = useState(false);
-  const [ocrNote, setOcrNote] = useState("Paste a party screenshot or choose an image.");
+  const [readNote, setReadNote] = useState("Paste a party screenshot or choose an image.");
   const [imagePreview, setImagePreview] = useState("");
   const previewUrlRef = useRef("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const readingRef = useRef(false);
+  const readAbortRef = useRef<AbortController | null>(null);
   const dungeonSuggestions = [...new Map(state.runs
     .map((savedRun) => savedRun.dungeon.trim())
     .filter(Boolean)
@@ -745,28 +690,23 @@ function RunModal({ state, run, currentUser, onClose, onSave }: { state: LootSta
   const suggestions = [...new Set(state.runs.flatMap((run) => run.loots.map((loot) => loot.name)))];
 
   const readImage = async (file: File) => {
+    if (readingRef.current) return;
+    readingRef.current = true;
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     previewUrlRef.current = URL.createObjectURL(file);
     setImagePreview(previewUrlRef.current);
-    setReading(true); setOcrNote("Reading names from screenshot…");
+    setReading(true); setReadNote("AI is reading the party names…");
+    const controller = new AbortController(); readAbortRef.current = controller;
     try {
-      const { createWorker } = await import("tesseract.js");
-      const preparedImage = await preparePartyImage(file);
-      let pass = "original";
-      const worker = await createWorker(["eng", "tha"], undefined, { logger: (message) => { if (message.status === "recognizing text") setOcrNote(`Reading ${pass} image… ${Math.round((message.progress ?? 0) * 100)}%`); } });
-      let originalText = "";
-      let enhancedText = "";
-      try {
-        originalText = (await worker.recognize(file)).data.text;
-        pass = "enhanced";
-        enhancedText = (await worker.recognize(preparedImage)).data.text;
-      } finally {
-        await worker.terminate();
-      }
-      const names = mergeNameReadings(recognizedNames(originalText), recognizedNames(enhancedText));
-      if (!names.length) { setOcrNote("No clear names found. Add them manually below."); return; }
-      const nextMembers = [...members];
-      const nextSelected: string[] = [];
+      const image = await preparePartyImage(file);
+      if (controller.signal.aborted) return;
+      const response = await fetch("/api/party-members", {method:"POST",headers:{"content-type":"application/json","X-Guild-ID":guildId},body:JSON.stringify({image}),signal:controller.signal});
+      const data = await response.json() as {names?:string[];unclear?:boolean;error?:string};
+      if (!response.ok) throw new Error(data.error ?? "Could not read this screenshot.");
+      if (controller.signal.aborted) return;
+      const names = data.names ?? [];
+      if (!names.length) { setReadNote("No clear party names found. Crop to the party list or add names manually."); return; }
+      const nextMembers = [...members], nextSelected: string[] = [];
       names.forEach((name) => {
         const key = memberNameKey(name);
         let member = nextMembers.find((m) => memberNameKey(m.name) === key)
@@ -775,16 +715,18 @@ function RunModal({ state, run, currentUser, onClose, onSave }: { state: LootSta
         if (!nextMembers.some((candidate) => candidate.id === member.id)) nextMembers.push(member);
         if (!nextSelected.includes(member.id)) nextSelected.push(member.id);
       });
-      setMembers(nextMembers); setSelected(nextSelected); setOcrNote(`${names.length} names found. Review them before saving.`);
-    } catch { setOcrNote("Could not read that image. Add party names manually."); } finally { setReading(false); }
+      setMembers(nextMembers); setSelected(nextSelected);
+      setReadNote(names.length + " names found. " + (data.unclear ? "Some rows were unclear. Check and complete the roster." : "Review the spelling before saving."));
+    } catch (e) { if (!controller.signal.aborted) setReadNote((e as Error).message + " You can enter members manually."); }
+    finally { readingRef.current = false; if (!controller.signal.aborted) setReading(false); }
   };
 
   useEffect(() => {
-    const paste = (event: ClipboardEvent) => { const image = [...(event.clipboardData?.files ?? [])].find((file) => file.type.startsWith("image/")); if (image) readImage(image); };
+    const paste = (event: ClipboardEvent) => { const image = [...(event.clipboardData?.files ?? [])].find((file) => file.type.startsWith("image/")); if (image) { event.preventDefault(); void readImage(image); } };
     window.addEventListener("paste", paste); return () => window.removeEventListener("paste", paste);
   });
 
-  useEffect(() => () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); }, []);
+  useEffect(() => () => { readAbortRef.current?.abort(); if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); }, []);
 
   const addMember = () => { const member = { id: makeId(), name: "", active: true }; setMembers((current) => [...current, member]); setSelected((current) => [...current, member.id]); };
   const save = () => {
@@ -804,7 +746,7 @@ function RunModal({ state, run, currentUser, onClose, onSave }: { state: LootSta
     onSave({ ...nextState, payoutQueue: currentPayoutQueue(nextState) });
   };
 
-  return <Modal title={run ? "Edit dungeon run" : "Log a dungeon run"} subtitle={run ? "Update the dungeon, run time, party roster, or recorded loot." : "Import the party, confirm the roster, then record every drop."} onClose={onClose}><div className="modal-scroll"><section className="form-section"><div className="section-label"><span>1</span><div><strong>Dungeon & party screenshot</strong><small>OCR will read names only after you add a screenshot.</small></div></div><datalist id="dungeon-suggestions">{dungeonSuggestions.map((name) => <option value={name} key={name.toLowerCase()} />)}</datalist><div className="two-fields run-details-fields"><label className="field">Dungeon name<input list="dungeon-suggestions" value={dungeon} placeholder="Start typing a saved dungeon name" onChange={(e) => setDungeon(e.target.value)} /></label><label className="field">Run date & time<input type="datetime-local" value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} required /></label></div><button className={`dropzone ${reading ? "reading" : ""} ${imagePreview ? "has-preview" : ""}`} onClick={() => fileRef.current?.click()}><input ref={fileRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && readImage(e.target.files[0])} />{imagePreview ? <img className="party-preview" src={imagePreview} alt="Party screenshot preview" /> : reading ? <LoaderCircle className="spin" /> : <ImagePlus />}<span className="dropzone-status">{reading && imagePreview && <LoaderCircle className="spin" size={15} />}<strong>{ocrNote}</strong><small>PNG or JPG · You can also press Ctrl+V</small></span></button></section><section className="form-section"><div className="section-label"><span>2</span><div><strong>Confirm party members</strong><small>{run ? "Add, remove, or correct members in this saved party." : "No members are prefilled. Import a screenshot or add them manually."}</small></div></div><datalist id="member-suggestions">{state.members.map((member) => <option value={member.name} key={member.id} />)}</datalist><div className="member-editor">{members.map((member) => <div key={member.id} className={selected.includes(member.id) ? "member-edit selected" : "member-edit"}><button onClick={() => setSelected((current) => current.includes(member.id) ? current.filter((id) => id !== member.id) : [...current, member.id])}>{selected.includes(member.id) && <Check size={13} />}</button><input list="member-suggestions" value={member.name} placeholder="Start typing a saved member name" onChange={(e) => { const name = e.currentTarget.value; setMembers((current) => current.map((m) => m.id === member.id ? { ...m, name } : m)); }} /><button className="remove" onClick={() => { setMembers((current) => current.filter((m) => m.id !== member.id)); setSelected((current) => current.filter((id) => id !== member.id)); }}><X size={14} /></button></div>)}</div><button className="text-button add-member" onClick={addMember}><Plus size={15} /> Add member manually</button></section><section className="form-section"><div className="section-label"><span>3</span><div><strong>Add loot</strong><small>Suggestions learn from previously saved loot names.</small></div></div><datalist id="loot-suggestions">{suggestions.map((name) => <option value={name} key={name} />)}</datalist><div className="loot-editor"><div className="loot-head"><span>Loot name</span><span>Quantity</span></div>{loots.map((loot) => <div className="loot-edit-row" key={loot.id}><input list="loot-suggestions" value={loot.name} placeholder="e.g. Sunstone" onChange={(e) => setLoots((current) => current.map((item) => item.id === loot.id ? { ...item, name: e.target.value } : item))} /><input type="number" min="1" value={loot.quantity} onChange={(e) => setLoots((current) => current.map((item) => item.id === loot.id ? { ...item, quantity: Number(e.target.value) } : item))} /><button className="icon-button" onClick={() => setLoots((current) => current.filter((item) => item.id !== loot.id))}><Trash2 size={15} /></button></div>)}</div><button className="text-button" onClick={() => setLoots((current) => [...current, { id: makeId(), name: "", quantity: 1 }])}><Plus size={15} /> Add another loot</button></section></div><div className="modal-footer"><button className="secondary" onClick={onClose}>Cancel</button><button className="primary" onClick={save}><Check size={16} /> {run ? "Save changes" : "Save dungeon run"}</button></div></Modal>;
+  return <Modal title={run ? "Edit dungeon run" : "Log a dungeon run"} subtitle={run ? "Update the dungeon, run time, party roster, or recorded loot." : "Import the party, confirm the roster, then record every drop."} onClose={onClose}><div className="modal-scroll"><section className="form-section"><div className="section-label"><span>1</span><div><strong>Dungeon & party screenshot</strong><small>AI reads the party names after you add a screenshot. Review every name.</small></div></div><datalist id="dungeon-suggestions">{dungeonSuggestions.map((name) => <option value={name} key={name.toLowerCase()} />)}</datalist><div className="two-fields run-details-fields"><label className="field">Dungeon name<input list="dungeon-suggestions" value={dungeon} placeholder="Start typing a saved dungeon name" onChange={(e) => setDungeon(e.target.value)} /></label><label className="field">Run date & time<input type="datetime-local" value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} required /></label></div><button className={`dropzone ${reading ? "reading" : ""} ${imagePreview ? "has-preview" : ""}`} disabled={reading} onClick={() => fileRef.current?.click()}><input ref={fileRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && readImage(e.target.files[0])} />{imagePreview ? <img className="party-preview" src={imagePreview} alt="Party screenshot preview" /> : reading ? <LoaderCircle className="spin" /> : <ImagePlus />}<span className="dropzone-status">{reading && imagePreview && <LoaderCircle className="spin" size={15} />}<strong>{readNote}</strong><small>Crop to the party list · Ctrl+V or choose PNG / JPG / WebP</small></span></button></section><section className="form-section"><div className="section-label"><span>2</span><div><strong>Confirm party members</strong><small>{run ? "Add, remove, or correct members in this saved party." : "No members are prefilled. Import a screenshot or add them manually."}</small></div></div><datalist id="member-suggestions">{state.members.map((member) => <option value={member.name} key={member.id} />)}</datalist><div className="member-editor">{members.map((member) => <div key={member.id} className={selected.includes(member.id) ? "member-edit selected" : "member-edit"}><button disabled={reading} onClick={() => setSelected((current) => current.includes(member.id) ? current.filter((id) => id !== member.id) : [...current, member.id])}>{selected.includes(member.id) && <Check size={13} />}</button><input disabled={reading} list="member-suggestions" value={member.name} placeholder="Start typing a saved member name" onChange={(e) => { const name = e.currentTarget.value; setMembers((current) => current.map((m) => m.id === member.id ? { ...m, name } : m)); }} /><button disabled={reading} className="remove" onClick={() => { setMembers((current) => current.filter((m) => m.id !== member.id)); setSelected((current) => current.filter((id) => id !== member.id)); }}><X size={14} /></button></div>)}</div><button disabled={reading} className="text-button add-member" onClick={addMember}><Plus size={15} /> Add member manually</button></section><section className="form-section"><div className="section-label"><span>3</span><div><strong>Add loot</strong><small>Suggestions learn from previously saved loot names.</small></div></div><datalist id="loot-suggestions">{suggestions.map((name) => <option value={name} key={name} />)}</datalist><div className="loot-editor"><div className="loot-head"><span>Loot name</span><span>Quantity</span></div>{loots.map((loot) => <div className="loot-edit-row" key={loot.id}><input list="loot-suggestions" value={loot.name} placeholder="e.g. Sunstone" onChange={(e) => setLoots((current) => current.map((item) => item.id === loot.id ? { ...item, name: e.target.value } : item))} /><input type="number" min="1" value={loot.quantity} onChange={(e) => setLoots((current) => current.map((item) => item.id === loot.id ? { ...item, quantity: Number(e.target.value) } : item))} /><button className="icon-button" onClick={() => setLoots((current) => current.filter((item) => item.id !== loot.id))}><Trash2 size={15} /></button></div>)}</div><button className="text-button" onClick={() => setLoots((current) => [...current, { id: makeId(), name: "", quantity: 1 }])}><Plus size={15} /> Add another loot</button></section></div><div className="modal-footer"><button className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={reading} onClick={save}><Check size={16} /> {run ? "Save changes" : "Save dungeon run"}</button></div></Modal>;
 }
 
 function SaleModal({ state, inventory, initialLootName: requestedLootName, currentUser, onClose, onSave }: { state: LootState; inventory: ReturnType<typeof inventoryFor>; initialLootName?: string; currentUser: string; onClose: () => void; onSave: (state: LootState) => void }) {
@@ -862,7 +804,7 @@ function SaleModal({ state, inventory, initialLootName: requestedLootName, curre
     const nextState = { ...state, sales: [sale, ...state.sales], payoutQueue: [...unpaid, ...recipients] };
     onSave({ ...nextState, payoutQueue: currentPayoutQueue(nextState) });
   };
-  return <Modal title="Record a batch sale" subtitle="Each sold loot lot is divided among the party that earned it." onClose={onClose}><div className="modal-scroll sale-modal"><section className="form-section"><div className="section-label"><span>1</span><div><strong>Sale details</strong><small>Choose any accumulated loot in stock.</small></div></div><div className="two-fields"><label className="field">Loot<select value={lootName} onChange={(e) => selectLoot(e.target.value)}>{available.map((item) => <option key={item.name}>{item.name}</option>)}</select><small>{stock?.available.toLocaleString() ?? 0} available</small></label><label className="field">Quantity sold<input type="number" min="1" max={stock?.available} value={quantity} onChange={(e) => selectQuantity(Number(e.target.value))} /></label></div><label className="field">Price per item (Penya)<input type="number" min="0" value={unitPrice || ""} placeholder="0" onChange={(e) => setUnitPrice(Number(e.target.value))} /></label></section><section className="sale-summary"><div><span>Gross sale</span><strong><PenyaAmount value={total} /></strong></div><div><span>Recipients</span><strong>{recipients.length}</strong></div><div className="highlight"><span>Allocated salaries</span><strong><PenyaAmount value={allocatedTotal} /></strong></div></section><section className="form-section"><div className="section-label"><span>2</span><div><strong>Party salary allocation</strong><small>Each run’s sold quantity is split only among that run’s selected party members.</small></div></div><div className="recipient-list">{eligibleIds.map((id, index) => { const member = state.members.find((m) => m.id === id)!; const amount = recipientAmounts[id] ?? 0; return <div key={id} className={recipients.includes(id) ? "recipient selected" : "recipient"}><input aria-label={`Include ${member.name}`} type="checkbox" checked={recipients.includes(id)} onChange={() => setRecipients((current) => current.includes(id) ? current.filter((x) => x !== id) : [...current, id])} /><span className={index === 0 ? "queue-number first" : "queue-number"}>{index + 1}</span><span className="avatar">{member.name.slice(0, 2).toUpperCase()}</span><strong>{member.name}</strong>{index === 0 && <em>First to receive</em>}<span className="recipient-tools"><b>{recipients.includes(id) ? <PenyaAmount value={amount} /> : "Skipped"}</b><button type="button" title={`Copy ${member.name}`} aria-label={`Copy ${member.name}`} onClick={() => copyText(`name-${id}`, member.name)}>{copiedKey === `name-${id}` ? <Check size={13} /> : <Copy size={13} />}<span>Name</span></button><button type="button" disabled={!recipients.includes(id)} title={`Copy ${plainAmount.format(amount)}`} aria-label={`Copy salary for ${member.name}`} onClick={() => copyText(`amount-${id}`, String(amount))}>{copiedKey === `amount-${id}` ? <Check size={13} /> : <Copy size={13} />}<span>Salary</span></button></span></div>; })}</div>{!allocationComplete && total > 0 && <div className="allocation-warning">Select at least one member from every contributing party before saving.</div>}</section><section className="form-section mailing-helper"><div className="section-label"><span>3</span><div><strong>Mailing helper</strong><small>Choose a member to generate mail using their exact sold loot quantity and salary.</small></div></div><label className="mail-recipient">Mail recipient<select value={selectedMailRecipientId} onChange={(event) => setMailRecipientId(event.target.value)}>{recipients.map((id) => <option value={id} key={id}>{state.members.find((member) => member.id === id)?.name ?? "Unknown"}</option>)}</select></label><div className="mail-copy-row"><span>Mail header</span><code>{mailHeader}</code><button type="button" onClick={() => copyText("mail-header", mailHeader)}>{copiedKey === "mail-header" ? <Check size={14} /> : <Copy size={14} />} Copy</button></div><div className="mail-copy-row"><span>Mail content</span><code>{mailContent}</code><button type="button" onClick={() => copyText("mail-content", mailContent)}>{copiedKey === "mail-content" ? <Check size={14} /> : <Copy size={14} />} Copy</button></div><div className="mail-copy-row"><span>Member name</span><code>{selectedMailMember?.name ?? ""}</code><button type="button" disabled={!selectedMailMember} onClick={() => copyText("mail-member", selectedMailMember?.name ?? "")}>{copiedKey === "mail-member" ? <Check size={14} /> : <Copy size={14} />} Copy</button></div><div className="mail-copy-row"><span>Salary amount</span><code>{plainAmount.format(selectedMailSalary)}</code><button type="button" disabled={!selectedMailRecipientId} onClick={() => copyText("mail-salary", String(selectedMailSalary))}>{copiedKey === "mail-salary" ? <Check size={14} /> : <Copy size={14} />} Copy</button></div></section></div><div className="modal-footer"><button className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={!allocationComplete || unitPrice <= 0 || quantity < 1 || quantity > (stock?.available ?? 0)} onClick={save}><Coins size={16} /> Save sale & salaries</button></div></Modal>;
+  return <Modal title="Record a batch sale" subtitle="Each sold loot lot is divided among the party that earned it." onClose={onClose}><div className="modal-scroll sale-modal"><section className="form-section"><div className="section-label"><span>1</span><div><strong>Sale details</strong><small>Choose any accumulated loot in stock.</small></div></div><div className="two-fields"><label className="field">Loot<StyledSelect aria-label="Loot" value={lootName} onChange={(e) => selectLoot(e.target.value)}>{available.map((item) => <option key={item.name}>{item.name}</option>)}</StyledSelect><small>{stock?.available.toLocaleString() ?? 0} available</small></label><label className="field">Quantity sold<input type="number" min="1" max={stock?.available} value={quantity} onChange={(e) => selectQuantity(Number(e.target.value))} /></label></div><label className="field">Price per item (Penya)<input type="number" min="0" value={unitPrice || ""} placeholder="0" onChange={(e) => setUnitPrice(Number(e.target.value))} /></label></section><section className="sale-summary"><div><span>Gross sale</span><strong><PenyaAmount value={total} /></strong></div><div><span>Recipients</span><strong>{recipients.length}</strong></div><div className="highlight"><span>Allocated salaries</span><strong><PenyaAmount value={allocatedTotal} /></strong></div></section><section className="form-section"><div className="section-label"><span>2</span><div><strong>Party salary allocation</strong><small>Each run’s sold quantity is split only among that run’s selected party members.</small></div></div><div className="recipient-list">{eligibleIds.map((id, index) => { const member = state.members.find((m) => m.id === id)!; const amount = recipientAmounts[id] ?? 0; return <div key={id} className={recipients.includes(id) ? "recipient selected" : "recipient"}><input aria-label={`Include ${member.name}`} type="checkbox" checked={recipients.includes(id)} onChange={() => setRecipients((current) => current.includes(id) ? current.filter((x) => x !== id) : [...current, id])} /><span className={index === 0 ? "queue-number first" : "queue-number"}>{index + 1}</span><span className="avatar">{member.name.slice(0, 2).toUpperCase()}</span><strong>{member.name}</strong>{index === 0 && <em>First to receive</em>}<span className="recipient-tools"><b>{recipients.includes(id) ? <PenyaAmount value={amount} /> : "Skipped"}</b><button type="button" title={`Copy ${member.name}`} aria-label={`Copy ${member.name}`} onClick={() => copyText(`name-${id}`, member.name)}>{copiedKey === `name-${id}` ? <Check size={13} /> : <Copy size={13} />}<span>Name</span></button><button type="button" disabled={!recipients.includes(id)} title={`Copy ${plainAmount.format(amount)}`} aria-label={`Copy salary for ${member.name}`} onClick={() => copyText(`amount-${id}`, String(amount))}>{copiedKey === `amount-${id}` ? <Check size={13} /> : <Copy size={13} />}<span>Salary</span></button></span></div>; })}</div>{!allocationComplete && total > 0 && <div className="allocation-warning">Select at least one member from every contributing party before saving.</div>}</section><section className="form-section mailing-helper"><div className="section-label"><span>3</span><div><strong>Mailing helper</strong><small>Choose a member to generate mail using their exact sold loot quantity and salary.</small></div></div><label className="mail-recipient">Mail recipient<StyledSelect aria-label="Mail recipient" value={selectedMailRecipientId} onChange={(event) => setMailRecipientId(event.target.value)}>{recipients.map((id) => <option value={id} key={id}>{state.members.find((member) => member.id === id)?.name ?? "Unknown"}</option>)}</StyledSelect></label><div className="mail-copy-row"><span>Mail header</span><code>{mailHeader}</code><button type="button" onClick={() => copyText("mail-header", mailHeader)}>{copiedKey === "mail-header" ? <Check size={14} /> : <Copy size={14} />} Copy</button></div><div className="mail-copy-row"><span>Mail content</span><code>{mailContent}</code><button type="button" onClick={() => copyText("mail-content", mailContent)}>{copiedKey === "mail-content" ? <Check size={14} /> : <Copy size={14} />} Copy</button></div><div className="mail-copy-row"><span>Member name</span><code>{selectedMailMember?.name ?? ""}</code><button type="button" disabled={!selectedMailMember} onClick={() => copyText("mail-member", selectedMailMember?.name ?? "")}>{copiedKey === "mail-member" ? <Check size={14} /> : <Copy size={14} />} Copy</button></div><div className="mail-copy-row"><span>Salary amount</span><code>{plainAmount.format(selectedMailSalary)}</code><button type="button" disabled={!selectedMailRecipientId} onClick={() => copyText("mail-salary", String(selectedMailSalary))}>{copiedKey === "mail-salary" ? <Check size={14} /> : <Copy size={14} />} Copy</button></div></section></div><div className="modal-footer"><button className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={!allocationComplete || unitPrice <= 0 || quantity < 1 || quantity > (stock?.available ?? 0)} onClick={save}><Coins size={16} /> Save sale & salaries</button></div></Modal>;
 }
 
 function ConfirmModal({ title, text, onCancel, onConfirm }: { title: string; text: string; onCancel: () => void; onConfirm: () => void }) {
