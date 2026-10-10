@@ -36,7 +36,7 @@ await op('discord_config',owner,{enabled:true,webhookUrl:'https://discord.com/ap
 job=await op('discord_claim');assert.ok(job);await op('discord_ack',owner,{id:job.id,claim:job.claim,success:true});assert.equal((await op('discord_status')).pending,false);
 await db.exec('reset role;set role authenticated');await assert.rejects(()=>op('guild_icon_update',owner,{icon}),/permission denied/);await assert.rejects(()=>op('discord_status'),/permission denied/);
 let calls=0;
-const success=await deliverDiscord('https://discord.com/api/webhooks/123/test','Test',async(url,init)=>{calls++;assert.equal(url.searchParams.get('wait'),'true');assert.ok(init.headers['User-Agent'].startsWith('DiscordBot'));assert.deepEqual(JSON.parse(init.body).allowed_mentions,{parse:[]});return new Response('{}',{status:200});});assert.equal(success.success,true);
+const success=await deliverDiscord('https://discord.com/api/webhooks/123/test','Test',async(url,init)=>{calls++;assert.equal(url.searchParams.get('wait'),'true');assert.equal(init.redirect,'manual');assert.ok(init.headers['User-Agent'].startsWith('DiscordBot'));assert.deepEqual(JSON.parse(init.body).allowed_mentions,{parse:[]});return new Response('{}',{status:200});});assert.equal(success.success,true);
 const limited=await deliverDiscord('https://discord.com/api/webhooks/123/test','Test',async()=>new Response('{"retry_after":2.7}',{status:429}));assert.equal(limited.retrySeconds,3);
 const missing=await deliverDiscord('https://discord.com/api/webhooks/123/test','Test',async()=>new Response('{}',{status:404}));assert.match(missing.error,/deleted/);
 const invalid=await deliverDiscord('https://example.com/secret','Test',async()=>{calls++;});assert.equal(invalid.success,false);assert.equal(calls,1);

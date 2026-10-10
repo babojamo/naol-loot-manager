@@ -3,8 +3,9 @@ export async function deliverDiscord(url:string,content:string,send:typeof fetch
   if(!/^https:\/\/discord\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/.test(url))return {success:false,error:'The saved webhook URL is invalid. Replace it in Discord settings.',retrySeconds:3600};
   const endpoint=new URL(url);endpoint.searchParams.set('wait','true');
   try{
-    const response=await send(endpoint,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json','User-Agent':'DiscordBot (https://naol.lokwensio.com, 1.0)'},body:JSON.stringify({content,allowed_mentions:{parse:[]}}),signal:AbortSignal.timeout(10000)});
+    const response=await send(endpoint,{method:'POST',redirect:'manual',headers:{'Content-Type':'application/json','User-Agent':'DiscordBot (https://naol.lokwensio.com, 1.0)'},body:JSON.stringify({content,allowed_mentions:{parse:[]}}),signal:AbortSignal.timeout(10000)});
     if(response.ok){await response.arrayBuffer();return {success:true,retrySeconds:0};}
+    if(response.status>=300&&response.status<400)return {success:false,error:'Discord redirected the webhook request. Replace it with a direct Discord webhook URL.',retrySeconds:3600};
     const body=await response.json().catch(()=>null) as {code?:number;retry_after?:number}|null;
     if(response.status===429){const delay=Number(response.headers.get('Retry-After')??body?.retry_after??60);return {success:false,error:'Discord rate-limited delivery. Messages are saved and will retry after the cooldown.',retrySeconds:Number.isFinite(delay)?Math.max(1,Math.min(86400,Math.ceil(delay))):60};}
     if(response.status===404)return {success:false,error:'Discord could not find this webhook. It may have been deleted; replace its URL.',retrySeconds:3600};
