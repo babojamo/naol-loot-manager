@@ -7,8 +7,8 @@ export async function GET(request:Request){return api(async()=>{
 },request);}
 export async function PUT(request:Request){return api(async()=>{
   const {guild,user}=await guildContext(request);requireAdmin(guild);
-  const parsed=z.object({name:z.string().trim().min(2).max(80),description:z.string().trim().max(300),shopEnabled:z.boolean(),inquiriesEnabled:z.boolean()}).safeParse(await request.json());
-  if(!parsed.success)throw new ApiError(400,'Check the guild name and description.');
+  const parsed=z.object({name:z.string().trim().min(2).max(80),description:z.string().trim().max(300),shopEnabled:z.boolean(),inquiriesEnabled:z.boolean(),vendorContactMessage:z.string().trim().max(2000).optional()}).safeParse(await request.json());
+  if(!parsed.success)throw new ApiError(400,'Check the playground name, description and vendor contact message.');
   await database('settings_update',user,guild.id,parsed.data);
   return json({ok:true});
 },request);}
