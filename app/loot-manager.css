@@ -24,3 +24,5 @@
 .plan-card li.plan-feature-excluded svg{color:#dc3545}
 
 .sale-modal .two-fields{align-items:start}.sale-modal .two-fields .field{align-content:start}.mailing-promotion figure{background:#f9f8f4;border:1px solid #e5e0ee;padding:18px}.mailing-promotion figcaption{color:#777185}.mailing-promotion img{border-radius:10px}@media(max-width:850px){.mailing-promotion figure{padding:12px}}
+
+@media(max-width:760px){.product-nav{gap:12px}.product-nav nav{flex:1;min-width:0;justify-content:flex-end;gap:8px 12px}.product-nav nav>a.shop-nav-link{display:inline-flex;align-items:center;min-height:40px;white-space:nowrap;font-size:12px;color:var(--lm-purple)}.product-nav .manage-playground-link{min-height:40px;max-width:100%;padding:10px 12px;font-size:11px;gap:8px}.product-nav .product-logo{flex-shrink:0}}
