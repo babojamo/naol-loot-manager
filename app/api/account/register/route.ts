@@ -3,7 +3,7 @@ import {env} from 'cloudflare:workers';
 import {z} from 'zod';
 import {api,checkMutation,json,ApiError,tokenHash} from '../../../../lib/tenant';
 import {database} from '../../../../lib/supabase-store';
-const schema=z.object({name:z.string().trim().min(2).max(80),username:z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_]{2,29}$/),email:z.string().trim().toLowerCase().email().max(254),password:z.string().min(8).max(128)});
+const schema=z.object({name:z.string().trim().min(2).max(80),username:z.string().trim().toLowerCase().min(3).max(30),email:z.string().trim().toLowerCase().email().max(254),password:z.string().min(8).max(128)});
 export async function POST(request:Request){return api(async()=>{
   checkMutation(request);
   const text=await request.text();if(text.length>4096)throw new ApiError(400,'Registration details are too long.');

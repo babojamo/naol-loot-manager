@@ -33,6 +33,7 @@ import type { DungeonRun, LootState, Member, RunLoot, Sale } from "../../lib/typ
 import { normalizeVendingPrices, setVendingPrice } from "../../lib/vending-prices";
 import { lootImageFor, normalizeLootImages, setLootImage } from "../../lib/loot-images";
 import { resolveRunParty } from "../../lib/run-party";
+import {PlaygroundSwitcher} from './playground-switcher';
 import { PenyaAmount, PenyaCoin } from "./penya";
 
 
@@ -387,8 +388,8 @@ async function preparePartyImage(file: File): Promise<Blob> {
   }
 }
 
-function Logo({ name = "Loot Manager" }: { name?: string }) {
-  return <a className="brand" href="/"><span className="brand-mark loot-logo"><Gem size={25}/></span><div><strong>{name}</strong><small>LOOT MANAGER</small></div></a>;
+function Logo({ name = "NAOL" }: { name?: string }) {
+  return <a className="brand" href="/"><span className="brand-mark naol-mark"><img src="/brand/naol-logo.png" alt="NAOL"/></span><div><strong>{name}</strong><small>NAOL</small></div></a>;
 }
 
 export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: Tab }) {
@@ -484,9 +485,9 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
     <main className="app-shell">
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
         <div className="sidebar-top"><Logo name={currentGuild?.name} /><button className="icon-button close-nav" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
-        <nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}<a href="/playgrounds"><Users size={18}/><span>Switch playground</span></a><a href="/settings"><ShieldCheck size={18}/><span>Playground & team</span></a><a href={`/shop?playground=${currentGuild?.slug ?? ""}`}><Store size={18}/><span>Public shop</span></a><a href={`/inquiries?playground=${currentGuild?.slug ?? ""}`}><Search size={18}/><span>Public inquiries</span></a></nav>
+        <PlaygroundSwitcher currentId={currentGuild?.id} disabled={saving||showRun||showSale}/><nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}<a href={`/shop?playground=${currentGuild?.slug ?? ""}`}><Store size={18}/><span>Public shop</span></a><a href={`/inquiries?playground=${currentGuild?.slug ?? ""}`}><Search size={18}/><span>Public inquiries</span></a></nav>
         <div className="sidebar-note"><Sparkles size={16} /><div><strong>Fair payout queue</strong><span>Oldest waiting member is shown first.</span></div></div>
-        <button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button>
+        <div className="sidebar-footer"><a href="/guide"><Sparkles size={17}/><span>App guide</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>
       </aside>
       {mobileNav && <button className="scrim" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
 

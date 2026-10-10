@@ -1,10 +1,10 @@
-# Loot Manager
+# NAOL
 
-Independent playground loot management. Uses the new Supabase project; the Stoics site and its database remain separate.
+Where every drop makes someone jealous. Independent playground loot management. Uses the new Supabase project; the Stoics site and its database remain separate.
 
 ## Setup
 
-Run `supabase/001_loot_manager.sql`, then `002_playgrounds_accounts_plans.sql`, `003_public_features.sql`, `004_discord_and_plan_pauses.sql`, `005_registration_and_settings.sql`, and `006_email_proof_guard.sql` in order. Keep `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SECRET_KEY` in Sites environment settings.
+Run `supabase/001_loot_manager.sql`, then `002_playgrounds_accounts_plans.sql`, `003_public_features.sql`, `004_discord_and_plan_pauses.sql`, `005_registration_and_settings.sql`, `006_email_proof_guard.sql`, and `007_naol_username_and_shop.sql` in order. Keep `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SECRET_KEY` in Sites environment settings.
 
 Enable Supabase email/password registrations and email confirmation. Set Site URL to `https://loot-manager.lokwensio.com` and allow `https://loot-manager.lokwensio.com/auth/callback` and `https://loot-manager.kevinloquencio.chatgpt.site/auth/callback`. Configure custom SMTP in Supabase for optional verification email delivery; the default mail service restricts recipient delivery.
 
@@ -31,3 +31,5 @@ All application tables have RLS enabled and direct browser access revoked. Serve
 ## Development
 
 `npm ci`, `node scripts/test-playgrounds.mjs`, `npx tsc --noEmit`, `npm run build`. SQL tests run in disposable in-memory PostgreSQL using PGlite. Production migrations are applied manually in Supabase, not by Sites deployment.
+
+NAOL branding uses the supplied golden emblem in the header, footer, dashboard and page previews. `/guide` explains account setup, playgrounds, runs, inventory, salary recording, public features and Discord. `/shop` lists every enabled public playground’s loot by default; playground and loot-name filters narrow the stock without exposing private ledgers. Usernames allow any trimmed 3–30-character value, with case-insensitive uniqueness.

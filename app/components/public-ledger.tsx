@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Gem, Search, Store, Users, LoaderCircle, ArrowUpRight } from 'lucide-react';
 import { SiteNav, SiteFooter } from './site-nav';
+import {PublicShop} from './public-shop';
 import { PenyaAmount } from './penya';
 type PublicGuild={name:string;slug:string;description:string;shop_enabled?:boolean;inquiries_enabled?:boolean};
 type Item={name:string;vendingPrice:number;available:number;image?:string};
 type Result={name:string;pendingLoot:Array<{name:string;quantity:number}>;paidLoot:Array<{name:string;sales:number}>;totalPaid:number;estimatedPendingSalary:number};
 type PublicResponse={error?:string;guild?:PublicGuild;guilds?:PublicGuild[];items?:Item[];results?:Result[]};
-export function PublicLedger({mode}:{mode:'shop'|'inquiries'}){
+export function PublicLedger({mode}:{mode:'shop'|'inquiries'}){return mode==='shop'?<PublicShop/>:<PublicInquiries mode={mode}/>;}
+function PublicInquiries({mode}:{mode:'shop'|'inquiries'}){
   const params=useSearchParams(),slug=params.get('playground')??params.get('guild')??'';
   const [guilds,setGuilds]=useState<PublicGuild[]>([]),[guild,setGuild]=useState<PublicGuild|null>(null),[items,setItems]=useState<Item[]>([]),[results,setResults]=useState<Result[]>([]);
   const [query,setQuery]=useState(params.get('query')??''),[loading,setLoading]=useState(true),[error,setError]=useState('');
