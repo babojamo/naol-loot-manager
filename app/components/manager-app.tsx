@@ -1,4 +1,5 @@
 "use client";
+import {PlanRequest} from './plan-request';
 import {PlaygroundIcon} from './playground-icon';
 import {StyledSelect} from "./styled-select";
 
@@ -431,7 +432,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
         <div className="sidebar-top"><Logo name={currentGuild?.name} icon={currentGuild?.icon}/><button className="icon-button close-nav" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
         <PlaygroundSwitcher currentId={currentGuild?.id} disabled={saving||showRun||showSale}/><nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}<a href={`/shop?playground=${currentGuild?.slug ?? ""}`}><Store size={18}/><span>Public shop</span></a><a href={`/inquiries?playground=${currentGuild?.slug ?? ""}`}><Search size={18}/><span>Public inquiries</span></a></nav>
         <div className="sidebar-note"><Sparkles size={16} /><div><strong>Fair payout queue</strong><span>Oldest waiting member is shown first.</span></div></div>
-        <div className="sidebar-footer"><a href="/guide"><Sparkles size={17}/><span>App guide</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>
+        <div className="sidebar-footer"><PlanRequest sidebar/><a href="/guide"><Sparkles size={17}/><span>App guide</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>
       </aside>
       {mobileNav && <button className="scrim" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
 
