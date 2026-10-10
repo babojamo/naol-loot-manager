@@ -8,6 +8,8 @@ declare module "virtual:sites-connector-preview" {
 declare namespace Cloudflare {
   interface Env {
     OPENAI_API_KEY?: string;
+    RESEND_API_KEY?: string;
+    CONTACT_FROM_EMAIL?: string;
     CONNECTORS?: import("./connector-contract.mjs").ConnectorBinding;
   }
 }

@@ -25,7 +25,7 @@ export async function DELETE(request:Request){return api(async()=>{
 },request);}
 export async function PUT(request:Request){return api(async()=>{
   checkMutation(request);const user=await identity();const cap=z.number().int().min(0).max(1000000).nullable().optional();
-  const parsed=z.object({userId:z.string().uuid(),plan:z.enum(['Free','Elite','Legend']),banned:z.boolean(),paused:z.boolean().default(false),pausedUntil:z.string().datetime().nullable().default(null),overrides:z.object({playgrounds:cap,runs:cap,managers:cap}).strict()}).safeParse(await request.json());
+  const parsed=z.object({userId:z.string().uuid(),plan:z.enum(['Free','Elite','Legend']),banned:z.boolean(),discordOverride:z.boolean().optional(),paused:z.boolean().default(false),pausedUntil:z.string().datetime().nullable().default(null),overrides:z.object({playgrounds:cap,runs:cap,managers:cap}).strict()}).safeParse(await request.json());
   if(!parsed.success)throw new ApiError(400,'Check the account plan and limits.');
   await database('platform_update',user,undefined,parsed.data);return json({ok:true});
 },request);}

@@ -1,3 +1,4 @@
+import {authContinuation} from '../../lib/auth-continuation';
 import {getAccountUser} from '../../lib/account-auth';
 import {redirect} from 'next/navigation';
 import {headers} from 'next/headers';
@@ -7,7 +8,7 @@ import {AccountForm} from '../components/account-form';
 export const dynamic='force-dynamic';
 export const metadata={title:'Sign in',robots:{index:false,follow:false}};
 export default async function Login({searchParams}:{searchParams:Promise<{next?:string;confirmation?:string}>}){
-  const params=await searchParams;const next=params.next?.startsWith('/join?token=')?params.next:'/playgrounds';
+  const params=await searchParams;const next=authContinuation(params.next);
   if(await getAccountUser()){
     let path=next;try{await guildContext(new Request('https://naol.lokwensio.com/login',{headers:await headers()}));if(next==='/playgrounds')path='/overview';}catch(e){if(!(e instanceof ApiError))throw e;}redirect(path);
   }
