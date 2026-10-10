@@ -417,22 +417,22 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/state", { cache: "no-store", credentials: "same-origin" });
-      if ([401,403,409].includes(response.status)) { window.location.replace(response.status === 401 ? "/login" : "/guilds"); return; }
+      if ([401,403,409].includes(response.status)) { window.location.replace(response.status === 401 ? "/login" : "/playgrounds"); return; }
       const data = await response.json() as { error?: string; state: LootState; version: number; guildId: string };
-      if (!response.ok) throw new Error(data.error ?? "Could not load the guild ledger.");
-      if (data.guildId !== guildIdRef.current) { window.location.replace("/guilds"); return; }
+      if (!response.ok) throw new Error(data.error ?? "Could not load the playground ledger.");
+      if (data.guildId !== guildIdRef.current) { window.location.replace("/playgrounds"); return; }
       setState(withResolvedSaleAllocations(data.state));
       versionRef.current = data.version;
       setConnected(true); setAuthenticated(true); setFlash(null);
     } catch (error) {
       setConnected(false); setAuthenticated(true);
-      setFlash({ type: "warn", text: error instanceof Error ? error.message : "Could not load the guild ledger." });
+      setFlash({ type: "warn", text: error instanceof Error ? error.message : "Could not load the playground ledger." });
     }
   }, []);
   useEffect(() => {
     fetch("/api/auth/status", { credentials: "same-origin", cache: "no-store" }).then(r => r.json() as Promise<{ authenticated: boolean; username?: string; guild?: { id: string; name: string; slug: string } }>).then(data => {
       if (!data.authenticated) { window.location.replace("/login"); return; }
-      if (!data.guild) { window.location.replace("/guilds"); return; }
+      if (!data.guild) { window.location.replace("/playgrounds"); return; }
       guildIdRef.current = data.guild.id; setCurrentGuild(data.guild); setCurrentUser(data.username ?? "Manager"); void load();
     }).catch(() => window.location.replace("/login"));
   }, [load]);
@@ -454,14 +454,14 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
     savingRef.current = true; setSaving(true);
     try {
       const response = await fetch("/api/state", { method:"PUT", credentials:"same-origin", headers:{"content-type":"application/json"}, body:JSON.stringify({state:withResolvedSaleAllocations(next),guildId:guildIdRef.current,version:versionRef.current,action}) });
-      const result = await response.json() as { error?: string; state: LootState; version: number };
+      const result = await response.json() as { error?: string; state: LootState; version: number; notificationWarning?: string };
       if (!response.ok) throw new Error(result.error ?? "Could not save your changes.");
       setState(withResolvedSaleAllocations(result.state)); versionRef.current=result.version;
-      setFlash({type:"good",text:"Guild ledger saved"});
+      setFlash({type:result.notificationWarning?"warn":"good",text:result.notificationWarning||"Playground ledger saved"});
     } catch (error) { setFlash({type:"warn",text:error instanceof Error ? error.message : "Could not save your changes."}); }
     finally { savingRef.current=false; setSaving(false); }
   };
-  const logout = () => window.location.assign("/signout-with-chatgpt?return_to=%2F");
+  const logout = async () => { await fetch("/api/account/logout", {method:"POST"}); window.location.assign("/login"); };
 
   const openSale = (lootName = "") => {
     setSaleLootName(lootName);
@@ -484,7 +484,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
     <main className="app-shell">
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
         <div className="sidebar-top"><Logo name={currentGuild?.name} /><button className="icon-button close-nav" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
-        <nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}<a href="/guilds"><Users size={18}/><span>Switch guild</span></a><a href="/settings"><ShieldCheck size={18}/><span>Guild & team</span></a><a href={`/shop?guild=${currentGuild?.slug ?? ""}`}><Store size={18}/><span>Public shop</span></a><a href={`/inquiries?guild=${currentGuild?.slug ?? ""}`}><Search size={18}/><span>Public inquiries</span></a></nav>
+        <nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}<a href="/playgrounds"><Users size={18}/><span>Switch playground</span></a><a href="/settings"><ShieldCheck size={18}/><span>Playground & team</span></a><a href={`/shop?playground=${currentGuild?.slug ?? ""}`}><Store size={18}/><span>Public shop</span></a><a href={`/inquiries?playground=${currentGuild?.slug ?? ""}`}><Search size={18}/><span>Public inquiries</span></a></nav>
         <div className="sidebar-note"><Sparkles size={16} /><div><strong>Fair payout queue</strong><span>Oldest waiting member is shown first.</span></div></div>
         <button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button>
       </aside>
@@ -493,9 +493,9 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
       <section className="workspace">
         <header className="topbar">
           <button className="icon-button menu-button" onClick={() => setMobileNav(true)}><Menu size={21} /></button>
-          <div className="breadcrumb"><a href="/guilds">{currentGuild?.name ?? "Guild operations"}</a><ChevronRight size={14} /><strong>{nav.find((item) => item.id === tab)?.label}</strong></div>
+          <div className="breadcrumb"><a href="/playgrounds">{currentGuild?.name ?? "Playground operations"}</a><ChevronRight size={14} /><strong>{nav.find((item) => item.id === tab)?.label}</strong></div>
           <div className="user-badge"><span>{currentUser.slice(0, 2).toUpperCase()}</span><div><small>Signed in as</small><strong>{currentUser}</strong></div></div>
-          <div className={`sync ${connected ? "online" : "local"}`}><span />{saving ? "Saving…" : connected ? "Guild synced" : "Load failed"}</div>
+          <div className={`sync ${connected ? "online" : "local"}`}><span />{saving ? "Saving…" : connected ? "Playground synced" : "Load failed"}</div>
           <button className="primary top-action" onClick={() => setShowRun(true)}><Plus size={17} /> New run</button>
         </header>
 
@@ -524,7 +524,7 @@ function Dashboard({ state, inventory, totalStock, totalSales, salaryPaid, onRun
   const payoutQueue = currentPayoutQueue(state);
   const pendingLoot = pendingLootByMember(state);
   return <>
-    <PageTitle eyebrow="CONTROL ROOM" title="Loot overview" text="A live view of your runs, stock, and guild payouts." action={<div className="title-actions"><button className="secondary" onClick={onSale}><Coins size={17} /> Record sale</button><button className="primary" onClick={onRun}><Plus size={17} /> New run</button></div>} />
+    <PageTitle eyebrow="CONTROL ROOM" title="Loot overview" text="A live view of your runs, stock, and playground payouts." action={<div className="title-actions"><button className="secondary" onClick={onSale}><Coins size={17} /> Record sale</button><button className="primary" onClick={onRun}><Plus size={17} /> New run</button></div>} />
     <div className="metric-grid"><Metric icon={<PackageOpen />} tone="violet" label="Loot in inventory" value={totalStock.toLocaleString()} note={`${inventory.filter((i) => i.available > 0).length} item types`} /><Metric icon={<ReceiptText />} tone="amber" label="Gross sales" value={<PenyaAmount value={totalSales} />} note={`${state.sales.length} recorded batches`} /><Metric icon={<Coins />} tone="mint" label="Salary distributed" value={<PenyaAmount value={salaryPaid} />} note="Even shares, rounded down" /><Metric icon={<Users />} tone="blue" label="Active members" value={state.members.filter((m) => m.active).length.toString()} note="In payout rotation" /></div>
     <div className="dashboard-grid">
       <section className="panel"><div className="panel-head"><div><span className="panel-kicker">INVENTORY</span><h2>Ready to sell</h2></div><button className="text-button" onClick={onSale}>Sell a batch <ChevronRight size={15} /></button></div><div className="inventory-preview">{inventory.slice(0, 5).map((item, index) => <div className="inventory-line" key={item.name}><span className={`item-rune rune-${index % 4}`}><Gem size={18} /></span><div><strong>{item.name}</strong><small>{item.collected.toLocaleString()} collected</small></div><b>{item.available.toLocaleString()}</b><span>available</span></div>)}</div></section>
@@ -722,7 +722,7 @@ function MemberSearch({ state }: { state: LootState }) {
   return <>
     <PageTitle eyebrow="MEMBER LEDGER" title="Search members & loot" text="Find pending loot, paid loot, and the total amount paid to each member." />
     <div className="member-search-bar"><Search size={20} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a member or loot item..." />{query && <button aria-label="Clear search" onClick={() => setQuery("")}><X size={16} /></button>}</div>
-    {!normalizedQuery ? <div className="search-welcome"><Search size={28} /><h2>Search the guild ledger</h2><p>Enter a member name or an item such as Sunstone.</p></div> : results.length === 0 ? <div className="search-welcome"><Search size={28} /><h2>No matching records</h2><p>Try another member or loot item name.</p></div> : <><div className="search-result-count">{results.length} {results.length === 1 ? "member" : "members"} found</div><div className="member-results">{results.map(({ member, pendingLoot, paidLoot, totalPaid, estimatedPendingSalary }) => <article className="member-result" key={member.id}><div className="member-result-person"><span className="avatar">{member.name.slice(0, 2).toUpperCase()}</span><div><strong>{member.name}</strong><small>{pendingLoot.length > 0 ? "Waiting for loot sale" : paidLoot.length > 0 ? "Paid loot recorded" : "No matching loot"}</small></div></div><div className="member-pending-loot"><span>Pending loot</span><div>{pendingLoot.length > 0 ? pendingLoot.map((loot) => <b key={loot.name}>{loot.quantity.toLocaleString()} × {loot.name}</b>) : <em>None awaiting sale</em>}</div></div><div className="member-paid-loot"><span>Paid loot</span><div>{paidLoot.length > 0 ? paidLoot.map((loot) => <b key={loot.name}>{loot.name}{loot.sales > 1 ? ` · ${loot.sales} sales` : ""}</b>) : <em>No paid loot</em>}</div></div><div className="member-payment-summary"><span>Est. pending salary</span><strong><PenyaAmount value={estimatedPendingSalary} /></strong><span>Total paid</span><strong><PenyaAmount value={totalPaid} /></strong></div></article>)}</div></>}
+    {!normalizedQuery ? <div className="search-welcome"><Search size={28} /><h2>Search the playground ledger</h2><p>Enter a member name or an item such as Sunstone.</p></div> : results.length === 0 ? <div className="search-welcome"><Search size={28} /><h2>No matching records</h2><p>Try another member or loot item name.</p></div> : <><div className="search-result-count">{results.length} {results.length === 1 ? "member" : "members"} found</div><div className="member-results">{results.map(({ member, pendingLoot, paidLoot, totalPaid, estimatedPendingSalary }) => <article className="member-result" key={member.id}><div className="member-result-person"><span className="avatar">{member.name.slice(0, 2).toUpperCase()}</span><div><strong>{member.name}</strong><small>{pendingLoot.length > 0 ? "Waiting for loot sale" : paidLoot.length > 0 ? "Paid loot recorded" : "No matching loot"}</small></div></div><div className="member-pending-loot"><span>Pending loot</span><div>{pendingLoot.length > 0 ? pendingLoot.map((loot) => <b key={loot.name}>{loot.quantity.toLocaleString()} × {loot.name}</b>) : <em>None awaiting sale</em>}</div></div><div className="member-paid-loot"><span>Paid loot</span><div>{paidLoot.length > 0 ? paidLoot.map((loot) => <b key={loot.name}>{loot.name}{loot.sales > 1 ? ` · ${loot.sales} sales` : ""}</b>) : <em>No paid loot</em>}</div></div><div className="member-payment-summary"><span>Est. pending salary</span><strong><PenyaAmount value={estimatedPendingSalary} /></strong><span>Total paid</span><strong><PenyaAmount value={totalPaid} /></strong></div></article>)}</div></>}
   </>;
 }
 

@@ -88,7 +88,7 @@ export function auditMessages(previous: LootState, next: LootState, actor: strin
   return messages;
 }
 
-function chunks(lines: string[]) {
+export function chunks(lines: string[]) {
   const result: string[] = [];
   let current = "";
   for (const line of lines) {

@@ -1,6 +1,6 @@
-import { getChatGPTUser } from "../app/chatgpt-auth";
+import { getAccountUser } from "./account-auth";
 import { database } from './supabase-store';
-import type { ChatGPTUser } from '../app/chatgpt-auth';
+import type { AccountUser } from './account-auth';
 import type { LootState } from "./types";
 
 export type Guild = { id: string; name: string; slug: string; description: string; is_public: number; role?: string };
@@ -8,7 +8,7 @@ export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 export async function identity() {
-  const user = await getChatGPTUser();
+  const user = await getAccountUser();
   if (!user) throw new ApiError(401, "Sign in to continue.");
   await database('account',user);
   return user;
@@ -17,15 +17,15 @@ export async function guildContext(request: Request) {
   checkMutation(request);
   const user = await identity();
   const guildId = request.headers.get("cookie")?.match(/(?:^|;\s*)loot_manager_guild=([^;]+)/)?.[1];
-  if (!guildId) throw new ApiError(409, "Choose a guild to continue.");
-  if(!/^[a-f0-9-]{36}$/i.test(guildId)) throw new ApiError(403,'You do not have access to this guild.');
+  if (!guildId) throw new ApiError(409, "Choose a playground to continue.");
+  if(!/^[a-f0-9-]{36}$/i.test(guildId)) throw new ApiError(403,'You do not have access to this playground.');
   const guild = await database<Guild>('guild_context',user,guildId);
-  if (!guild) throw new ApiError(403, "You do not have access to this guild.");
+  if (!guild) throw new ApiError(403, "You do not have access to this playground.");
   if (request.headers.get('X-Guild-ID') && request.headers.get('X-Guild-ID') !== guild.id) throw new ApiError(409,'Your active guild changed. Reload this page before continuing.');
   return { user, guild };
 }
 export function requireAdmin(guild: Guild) {
-  if (!['owner','admin'].includes(guild.role ?? '')) throw new ApiError(403, "Only guild owners and admins can manage the team.");
+  if (guild.role !== 'owner') throw new ApiError(403, "Only the playground owner can manage users and settings.");
 }
 export function checkMutation(request: Request) {
   if (['GET','HEAD','OPTIONS'].includes(request.method)) return;
@@ -47,14 +47,15 @@ export async function api(work: () => Promise<Response>, request?: Request) {
     if(request?.body && !request.bodyUsed) { try { await request.arrayBuffer(); } catch {} }
   }
 }
-export async function ledger(guildId: string,user?:ChatGPTUser) {
+export async function ledger(guildId: string,user?:AccountUser) {
   return database<{state:LootState;version:number}>(user?'ledger_get':'public_ledger',user,guildId);
 }
 export async function publicGuild(request: Request) {
-  const slug = new URL(request.url).searchParams.get('guild') ?? '';
-  if (!slug) throw new ApiError(400, "Choose a guild first.");
-  const guild = await database<Guild>('public_guild',undefined,undefined,{slug});
-  if (!guild) throw new ApiError(404, "This guild has not published its shop and inquiries.");
+  const params=new URL(request.url).searchParams;
+  const slug = params.get('playground') ?? params.get('guild') ?? '';
+  if (!slug) throw new ApiError(400, "Choose a playground first.");
+  const guild = await database<Guild>('public_guild',undefined,undefined,{slug,feature:new URL(request.url).pathname.includes('shop')?'shop':'inquiries'});
+  if (!guild) throw new ApiError(404, "This playground has not published its shop and inquiries.");
   return guild;
 }
 export async function tokenHash(token: string) {

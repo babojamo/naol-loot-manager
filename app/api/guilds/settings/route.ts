@@ -7,10 +7,22 @@ export async function GET(request:Request){return api(async()=>{
 },request);}
 export async function PUT(request:Request){return api(async()=>{
   const {guild,user}=await guildContext(request);requireAdmin(guild);
-  const parsed=z.object({name:z.string().trim().min(2).max(80),description:z.string().trim().max(300),isPublic:z.boolean()}).safeParse(await request.json());
+  const parsed=z.object({name:z.string().trim().min(2).max(80),description:z.string().trim().max(300),shopEnabled:z.boolean(),inquiriesEnabled:z.boolean()}).safeParse(await request.json());
   if(!parsed.success)throw new ApiError(400,'Check the guild name and description.');
   await database('settings_update',user,guild.id,parsed.data);
   return json({ok:true});
+},request);}
+export async function POST(request:Request){return api(async()=>{
+  const {guild,user}=await guildContext(request);requireAdmin(guild);
+  const parsed=z.discriminatedUnion('action',[
+    z.object({action:z.literal('code_rotate')}),
+    z.object({action:z.literal('join_approve'),userId:z.string().uuid()}),
+    z.object({action:z.literal('join_reject'),userId:z.string().uuid()}),
+    z.object({action:z.literal('team_role'),userId:z.string().uuid(),role:z.literal('manager')}),
+    z.object({action:z.literal('playground_delete'),confirmation:z.string().min(2).max(80)}),
+  ]).safeParse(await request.json());
+  if(!parsed.success)throw new ApiError(400,'Choose a valid playground action.');
+  await database(parsed.data.action,user,guild.id,parsed.data);return json({ok:true});
 },request);}
 export async function DELETE(request:Request){return api(async()=>{
   const {guild,user}=await guildContext(request);requireAdmin(guild);

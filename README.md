@@ -1,28 +1,33 @@
 # Loot Manager
 
-This independent multi-tenant guild loot application uses a separate Supabase project. The existing Stoics website and database are not modified.
+Independent playground loot management. Uses the new Supabase project; the Stoics site and its database remain separate.
 
-## Supabase setup
+## Setup
 
-1. Run `supabase/001_loot_manager.sql` in the new project's SQL Editor.
-2. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in Sites environment settings.
-3. Add `SUPABASE_SECRET_KEY` as a secret (or legacy `SUPABASE_SERVICE_ROLE_KEY`). Never use a `NEXT_PUBLIC_` name for the server key.
-4. Publish after the migration and server secret are configured. Updating runtime variables requires a deployment to apply them.
+Run `supabase/001_loot_manager.sql`, then `002_playgrounds_accounts_plans.sql`, `003_public_features.sql`, and `004_discord_and_plan_pauses.sql` in order. Keep `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SECRET_KEY` in Sites environment settings.
 
-Sites still hosts the website and provides ChatGPT sign-in. Supabase stores the guild records. The publishable key alone cannot authorize these server operations because ChatGPT identity is not a Supabase Auth JWT.
+Enable Supabase email/password registrations and email confirmation. Set Site URL to `https://loot-manager.lokwensio.com` and allow `https://loot-manager.lokwensio.com/auth/callback` and `https://loot-manager.kevinloquencio.chatgpt.site/auth/callback`. Configure custom SMTP in Supabase for public registration email delivery; the default mail service restricts recipient delivery.
 
-All application tables use the `loot_manager_` prefix with RLS enabled and direct access revoked from `anon` and `authenticated`. Only the backend's server key can call the operation function. The application and SQL function verify guild membership and role. Create-guild and accept-invitation operations are atomic. Ledger updates use an expected version so concurrent changes cannot silently overwrite each other.
+The initial platform administrator is the verified Supabase Auth account `kevin.loquencio@gmail.com`. Register and confirm that email before opening `/admin`. Other registrations do not receive administrator privileges.
 
-The server key is used only for Supabase HTTPS requests; it is never sent to the browser or placed in a build manifest. No old credentials or webhook URLs are copied. No automatic fallback to D1 is implemented.
+## Accounts and playgrounds
 
-## Use
+Register with email, password, name and a unique username at `/register`. Choose create or join at `/playgrounds`. Code-based joining requires owner approval; email invitations grant Manager access only to the invited registered email. Managers cannot manage users, roles, settings or deletion. Each playground has one Owner; all other users are Managers.
 
-Sign in at `/login`, create or select a guild at `/guilds`, then invite managers using their ChatGPT account email in `/settings`. Share the generated invitation link yourself. Links expire after seven days. Owners can invite admins; owners and admins can invite managers and revoke access.
+Free: own 1 playground, create up to 5 current runs total, no managers. Elite: own 5 playgrounds, unlimited runs, up to 5 managers per playground. Legend: unlimited playgrounds, runs and managers. Joining other playgrounds does not consume the ownership allowance. Pending invitations reserve manager capacity.
 
-Protected pages are `/overview`, `/dungeon-runs`, `/loot-inventory`, `/sales`, `/statistics` and `/member-search`. Published guilds have `/shop?guild=<slug>` and `/inquiries?guild=<slug>`. Private guilds do not appear in the public directory. There is no member showcase page. Hosting audience controls are separate from guild publication.
+The owner’s plan governs each playground. Individual limit overrides apply to only that account. Plan pauses temporarily use Free limits, preserve data, and expire automatically if a resume time is set; indefinite pauses require manual resumption. Existing runs may still be edited or sold after a downgrade, but additional runs above the new limit are rejected. Bans block protected access and hide owned public pages.
 
-## Development and validation
+`/pricing` shows monthly Free, Elite (1B Penya), Legend (5B Penya) prices. Assignment, payment and renewal are manual; no checkout or automatic billing is implemented. `/plans` is also available.
 
-`npm ci`, `npm run test:supabase`, `npx tsc --noEmit` and `npm run build` validate the project. The PostgreSQL tests use an in-memory PGlite database, not production. `node --experimental-strip-types --test lib/run-party.test.mjs` checks run-specific member edits. `scripts/test-tenancy.mjs` exercises a local app with a separate disposable Supabase project and refuses non-local application URLs.
+## Public features and Discord
 
-Local runtime configuration comes from ignored `.env` files. Production configuration is stored in Sites environment variables. Apply the SQL migration in Supabase; Sites does not apply it automatically.
+Owners separately configure Public Shop and Public Inquiries in `/settings`. Both default off, cannot be enabled on Free or while a paid plan is paused, and are disabled when downgraded to Free. Public links use `/shop?playground=<slug>` and `/inquiries?playground=<slug>`. Each directory includes only enabled playgrounds for that feature.
+
+Discord logging is available on all plans. Owners save one channel webhook per playground and can disable or remove it. Webhook URLs stay in protected database storage and are omitted from all settings/list/context responses. No shared Stoics webhook is copied. Log records are transactionally queued with saved ledger changes. Requests try to deliver pending messages; failed delivery remains queued and can be retried in settings after one minute. Disabling removes pending logs. A timeout after Discord accepted a request can result in duplicate delivery on retry because Discord does not offer an idempotency key.
+
+All application tables have RLS enabled and direct browser access revoked. Server code verifies Supabase Auth identities and calls transactional RPCs with the secret key. Public endpoints return only public stock or inquiry projections, never raw ledgers. No server secret is included in client code.
+
+## Development
+
+`npm ci`, `node scripts/test-playgrounds.mjs`, `npx tsc --noEmit`, `npm run build`. SQL tests run in disposable in-memory PostgreSQL using PGlite. Production migrations are applied manually in Supabase, not by Sites deployment.

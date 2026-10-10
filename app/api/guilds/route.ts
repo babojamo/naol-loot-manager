@@ -5,7 +5,7 @@ import { defaultState } from '../../../lib/default-state';
 const createSchema=z.object({name:z.string().trim().min(2).max(80),slug:z.string().regex(/^[a-z][a-z0-9]+(?:-[a-z0-9]+)*$/).min(3).max(48),description:z.string().trim().max(300).default(''),isPublic:z.boolean().default(false)});
 export async function GET(request:Request){return api(async()=>{
   const user=await identity();
-  return json({guilds:await database('guild_list',user),user:{name:user.displayName,email:user.email}});
+  return json(await database('guild_list',user));
 },request);}
 export async function POST(request:Request){return api(async()=>{
   checkMutation(request);const user=await identity();

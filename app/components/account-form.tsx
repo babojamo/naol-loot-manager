@@ -1,0 +1,14 @@
+"use client";
+import {useState} from 'react';
+import {ArrowRight,LoaderCircle,ShieldCheck} from 'lucide-react';
+import {useAccountAuth} from './account-session';
+export function AccountForm({register=false,returnTo='/playgrounds'}:{register?:boolean;returnTo?:string}){
+  const auth=useAccountAuth();const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[name,setName]=useState(''),[username,setUsername]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[confirmed,setConfirmed]=useState(false);
+  async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setMessage('');try{
+    const result=register?await auth.auth.signUp({email,password,options:{data:{name:name.trim(),username:username.trim().toLowerCase()},emailRedirectTo:new URL('/auth/callback',window.location.origin).href}}):await auth.auth.signInWithPassword({email,password});
+    if(result.error)throw result.error;
+    if(register&&!result.data.session){setConfirmed(true);setMessage('Check your email to confirm your account. After confirmation, choose to create or join a playground.');}
+    else window.location.assign(returnTo);
+  }catch(e){const text=(e as Error).message;setMessage(/Database error saving new user/i.test(text)?'That username may already be taken. Choose another username and try again.':text);}finally{setBusy(false);}}
+  return <div className="access-card"><span className="feature-icon"><ShieldCheck/></span><h2>{register?'Create your account':'Welcome back'}</h2><p>{register?'A free account. A playground of your own. A clearer path from drop to reward.':'Sign in to open your playgrounds and manage your party’s rewards.'}</p>{message&&<p className="portal-alert" role="status">{message}</p>}{!confirmed&&<form onSubmit={submit}>{register&&<><label>Your name<input required minLength={2} maxLength={80} autoComplete="name" value={name} onChange={e=>setName(e.target.value)}/></label><label>Username<input required pattern="[a-zA-Z][a-zA-Z0-9_]{2,29}" minLength={3} maxLength={30} autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)}/><small>3–30 letters, numbers or underscores. Start with a letter.</small></label></>}<label>Email address<input required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Password<input required type="password" minLength={8} maxLength={128} autoComplete={register?'new-password':'current-password'} value={password} onChange={e=>setPassword(e.target.value)}/><small>{register?'At least 8 characters.':''}</small></label><button className="lm-button" disabled={busy}>{busy?<LoaderCircle className="spin" size={18}/>:<ArrowRight size={18}/>} {register?'Create free account':'Sign in'}</button></form>}<small>{register?<>Already registered? <a href="/login">Sign in</a></>:<>New here? <a href="/register">Create an account</a></>}</small></div>;
+}

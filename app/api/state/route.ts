@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { api, guildContext, json, ledger, ApiError } from '../../../lib/tenant';
 import { database } from '../../../lib/supabase-store';
 import { stateSchema } from '../../../lib/state-validation';
+import {auditMessages,chunks} from '../../../lib/discord-audit';
+import {flushDiscord} from '../../../lib/playground-discord';
 function canonical(value: unknown): string {
   if(Array.isArray(value)) return '['+value.map(canonical).join(',')+']';
   if(value && typeof value==='object') return '{'+Object.entries(value).filter(([,v])=>v!==undefined).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>JSON.stringify(k)+':'+canonical(v)).join(',')+'}';
@@ -14,7 +16,7 @@ export async function GET(request: Request) { return api(async () => {
 },request); }
 export async function PUT(request: Request) { return api(async () => {
   const {guild,user}=await guildContext(request);
-  if(!['owner','admin','manager'].includes(guild.role ?? '')) throw new ApiError(403,'You cannot edit this guild.');
+  if(!['owner','manager'].includes(guild.role ?? '')) throw new ApiError(403,'You cannot edit this guild.');
   const text=await request.text();
   if(new TextEncoder().encode(text).length>1500000) throw new ApiError(413,'The ledger is too large. Reduce the size of uploaded loot photos.');
   const parsed=z.object({guildId:z.string(),version:z.number().int().nonnegative(),action:z.string().max(200),state:stateSchema}).safeParse(JSON.parse(text));
@@ -35,6 +37,11 @@ export async function PUT(request: Request) { return api(async () => {
   const now=new Date().toISOString();
   next.auditLog=[{id:crypto.randomUUID(),username:user.displayName,action:parsed.data.action,createdAt:now},...previous.state.auditLog].slice(0,100);
   next.lastUpdatedBy=user.displayName; next.lastUpdatedAt=now;
-  await database('ledger_save',user,guild.id,{state:next,version:parsed.data.version});
-  return json({ok:true,state:next,version:parsed.data.version+1,guildId:guild.id});
+  const logs=auditMessages(previous.state,next,user.displayName);
+  if(!logs.length)logs.push([`**${parsed.data.action}** by ${user.displayName}`]);
+  const notifications=logs.flatMap(lines=>chunks([`Playground: ${guild.name}`,...lines]));
+  await database('ledger_save',user,guild.id,{state:next,version:parsed.data.version,notifications});
+  let notificationWarning='';
+  try{const status=await flushDiscord(user,guild.id);if(status.pending)notificationWarning='Discord logs are queued. Retry pending logs in playground settings.';}catch{notificationWarning='Ledger saved. Discord logs are queued for retry.';}
+  return json({ok:true,state:next,version:parsed.data.version+1,guildId:guild.id,notificationWarning});
 },request); }
