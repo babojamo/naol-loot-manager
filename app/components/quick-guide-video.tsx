@@ -16,7 +16,7 @@ export function QuickGuideVideo() {
     element.addEventListener('canplay',ready);element.addEventListener('error',failed);
     const load=async()=>{
       if(element.canPlayType('application/vnd.apple.mpegurl')) {
-        element.src='/guide-video/guide.m3u8';
+        element.src='/api/guide-video';
         void element.play().catch(()=>setLoading(false));return;
       }
       const {default:Hls}=await import('hls.js');
@@ -25,7 +25,7 @@ export function QuickGuideVideo() {
       player=new Hls({maxBufferLength:30,maxMaxBufferLength:60});
       player.on(Hls.Events.ERROR,(_event,data)=>{if(data.fatal)failed();});
       player.on(Hls.Events.MANIFEST_PARSED,()=>{void element.play().catch(()=>setLoading(false));});
-      player.loadSource('/guide-video/guide.m3u8');player.attachMedia(element);
+      player.loadSource('/api/guide-video');player.attachMedia(element);
     };
     void load().catch(failed);
     return()=>{disposed=true;player?.destroy();element.removeEventListener('canplay',ready);element.removeEventListener('error',failed);element.pause();element.removeAttribute('src');element.load();};
