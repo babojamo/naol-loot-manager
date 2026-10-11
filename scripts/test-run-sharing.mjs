@@ -17,6 +17,15 @@ const state={members:[{id:'p1',name:'Germi',active:true},{id:'p2',name:'Hidden P
 const projected=projectSharedRun({guild:{name:'Test'},runId:'r1',state,restricted:false});
 assert.deepEqual(projected.members,['Germi']);assert.equal(projected.loots[0].sold,2);assert.equal(projected.loots[0].available,1);assert.equal(projected.loots[0].vendingPrice,80000000);assert.equal(projected.loots[0].image,state.lootImages.sunstone);
 for(const hidden of ['Hidden Player','Private dungeon','auditLog','payoutQueue','salaryEach','recipientIds'])assert.ok(!JSON.stringify(projected).includes(hidden));
+// A batch sale spanning runs exposes only this run's allocated pieces.
+assert.deepEqual(projected.loots[0].sales,[{quantity:2,unitPrice:100,total:200,date:'2026-10-11T00:00:00Z'}]);
+const batches=structuredClone(state);batches.runs[0].loots[0].quantity=5;batches.sales[0].unitPrice=20000000;
+batches.sales.push({...batches.sales[0],id:'s2',quantity:2,unitPrice:40000000,createdAt:'2026-10-12T00:00:00Z'});
+const priced=projectSharedRun({guild:{name:'Test'},runId:'r1',state:batches});
+assert.equal(priced.loots[0].available,1);assert.deepEqual(priced.loots[0].sales.map(s=>[s.quantity,s.unitPrice,s.total]),[[2,20000000,40000000],[2,40000000,80000000]]);assert.equal(priced.loots[0].saleTotal,120000000);
+const split=structuredClone(state);split.sales[0].quantity=4;split.sales[0].allocations=[{runLootId:'l1',quantity:3},{runLootId:'l2',quantity:1}];split.sales[0].recipientIds=['p1','p2'];
+const splitView=projectSharedRun({guild:{name:'Test'},runId:'r1',state:split});assert.equal(splitView.loots[0].sales[0].quantity,3);assert.equal(splitView.loots[0].saleTotal,300);assert.equal(splitView.loots[0].available,0);
+const unsold=structuredClone(state);unsold.sales=[];const unsoldView=projectSharedRun({guild:{name:'Test'},runId:'r1',state:unsold});assert.deepEqual(unsoldView.loots[0].sales,[]);assert.equal(unsoldView.loots[0].saleTotal,0);
 const legacy=structuredClone(state);legacy.sales[0].allocations=[{runLootId:'l2',quantity:2}];assert.equal(projectSharedRun({guild:{name:'Test'},runId:'r1',state:legacy}).loots[0].sold,2);
 const sample={key:'test',from:'NAOL <mail@example.com>',emails:['guest@example.com','friend@example.com'],playground:'Test',dungeon:'Ankou',inviter:'Owner',token,revision:1};
 assert.deepEqual(await sendRunShareEmails(sample,async(url,init)=>{assert.equal(url,'https://api.resend.com/emails/batch');const body=JSON.parse(init.body);assert.deepEqual(body.map(m=>m.to),[['friend@example.com'],['guest@example.com']]);assert.ok(body.every(m=>m.text.includes('https://naol.lokwensio.com'+path)));assert.ok(init.headers['Idempotency-Key'].length<256);return new Response('{"data":[{"id":"sent1"},{"id":"sent2"}]}');}),[]);
