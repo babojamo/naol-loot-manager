@@ -26,9 +26,7 @@ const db=new PGlite();
 try{
 await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb);');
 const files=(await readdir('supabase')).filter(f=>/^\d{3}_.*\.sql$/.test(f)).sort();
-for(const file of files)await db.exec(await readFile('supabase/'+file,'utf8'));
-// Re-running the migration must not break wrapper chaining or stored links.
-await db.exec(await readFile('supabase/016_run_sharing.sql','utf8'));
+for(const file of files){await db.exec(await readFile('supabase/'+file,'utf8'));if(file.startsWith('016_'))await db.exec(await readFile('supabase/'+file,'utf8'));}
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const owner={id:uuid(1),email:'owner@example.com'},manager={id:uuid(2),email:'manager@example.com'},guest={id:uuid(3),email:'guest@example.com'},outsider={id:uuid(4),email:'outsider@example.com'},guild=uuid(10),otherGuild=uuid(11);
 for(const [i,u]of [owner,manager,guest,outsider].entries())await db.query('insert into auth.users values($1,$2,now(),$3)',[u.id,u.email,JSON.stringify({name:'Test User',username:`sharing${i}`,email_verification_pending:true})]);
