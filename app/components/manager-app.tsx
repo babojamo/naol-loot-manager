@@ -1,4 +1,6 @@
 "use client";
+import {RunShareButton} from './run-share';
+import {resolveSaleAllocations,soldQuantitiesByRunLoot} from '../../lib/sale-allocations';
 import {PlanRequest} from './plan-request';
 import {PlaygroundIcon} from './playground-icon';
 import {StyledSelect} from "./styled-select";
@@ -107,76 +109,6 @@ async function resizeLootPhoto(file: File) {
   const image = canvas.toDataURL("image/webp", 0.82);
   if (image.length > 700_000) throw new Error("The prepared image is still too large. Try a smaller photo.");
   return image;
-}
-
-type ResolvedSaleAllocation = { runLootId: string; quantity: number };
-
-function resolveSaleAllocations(state: LootState) {
-  const lots = state.runs.flatMap((run) => run.loots.map((loot) => ({
-    run,
-    loot,
-    remaining: loot.quantity,
-  })));
-  const lotById = new Map(lots.map((lot) => [lot.loot.id, lot]));
-  const allocationsBySale = new Map<string, ResolvedSaleAllocation[]>();
-  const recipientOverlap = (sale: Sale, run: DungeonRun) => {
-    const recipients = new Set(sale.recipientIds);
-    return run.memberIds.reduce((total, memberId) => total + (recipients.has(memberId) ? 1 : 0), 0);
-  };
-
-  [...state.sales]
-    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
-    .forEach((sale) => {
-      const lootKey = sale.lootName.trim().toLowerCase();
-      let requested = Math.max(0, sale.quantity);
-      const resolved: ResolvedSaleAllocation[] = [];
-      const candidates = () => lots.filter((lot) => lot.remaining > 0 && lot.loot.name.trim().toLowerCase() === lootKey);
-      const bestOverlap = () => candidates().reduce((best, lot) => Math.max(best, recipientOverlap(sale, lot.run)), 0);
-
-      for (const allocation of sale.allocations ?? []) {
-        const lot = lotById.get(allocation.runLootId);
-        if (!lot || lot.remaining <= 0 || lot.loot.name.trim().toLowerCase() !== lootKey || requested <= 0) continue;
-        // Older database allocations were date-based. Ignore a zero-party match when
-        // another unsold run contains the members who were actually paid.
-        if (recipientOverlap(sale, lot.run) === 0 && bestOverlap() > 0) continue;
-        const quantity = Math.min(requested, lot.remaining, Math.max(0, allocation.quantity));
-        if (quantity <= 0) continue;
-        resolved.push({ runLootId: lot.loot.id, quantity });
-        lot.remaining -= quantity;
-        requested -= quantity;
-      }
-
-      const fallbackLots = candidates().sort((left, right) => {
-        const overlapDifference = recipientOverlap(sale, right.run) - recipientOverlap(sale, left.run);
-        if (overlapDifference !== 0) return overlapDifference;
-        return new Date(left.run.createdAt).getTime() - new Date(right.run.createdAt).getTime();
-      });
-      for (const lot of fallbackLots) {
-        if (requested <= 0) break;
-        const quantity = Math.min(requested, lot.remaining);
-        if (quantity <= 0) continue;
-        resolved.push({ runLootId: lot.loot.id, quantity });
-        lot.remaining -= quantity;
-        requested -= quantity;
-      }
-      allocationsBySale.set(sale.id, resolved);
-    });
-
-  return allocationsBySale;
-}
-
-function soldQuantitiesByRunLoot(state: LootState) {
-  const soldByLoot = new Map<string, number>();
-  const runIdByLootId = new Map(state.runs.flatMap((run) => run.loots.map((loot) => [loot.id, run.id] as const)));
-  for (const allocations of resolveSaleAllocations(state).values()) {
-    allocations.forEach((allocation) => {
-      const runId = runIdByLootId.get(allocation.runLootId);
-      if (!runId) return;
-      const key = `${runId}:${allocation.runLootId}`;
-      soldByLoot.set(key, (soldByLoot.get(key) ?? 0) + allocation.quantity);
-    });
-  }
-  return soldByLoot;
 }
 
 function withResolvedSaleAllocations(state: LootState): LootState {
@@ -448,7 +380,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
         <div className="content">
           {flash && <div className={`flash ${flash.type}`}><Check size={16} />{flash.text}{flash.type === "warn" && <button className="text-button" onClick={() => void load()}>Reload ledger</button>}</div>}
           {tab === "dashboard" && <Dashboard state={state} inventory={inventory} totalStock={totalStock} totalSales={totalSales} salaryPaid={salaryPaid} onRun={() => setShowRun(true)} onSale={() => openSale()} />}
-          {tab === "runs" && <Runs state={state} onChange={persist} onRun={() => { setEditingRun(null); setShowRun(true); }} onEdit={(run) => { setEditingRun(run); setShowRun(true); }} />}
+          {tab === "runs" && <Runs guildId={currentGuild?.id??""} state={state} onChange={persist} onRun={() => { setEditingRun(null); setShowRun(true); }} onEdit={(run) => { setEditingRun(run); setShowRun(true); }} />}
           {tab === "inventory" && <Inventory inventory={inventory} onSale={openSale} onPriceChange={(name, amount) => persist({ ...state, vendingPrices: setVendingPrice(state.vendingPrices, name, amount) }, `Updated ${name} vending amount`)} onImageChange={(name, image) => persist({ ...state, lootImages: setLootImage(state.lootImages, name, image) }, `Updated ${name} loot photo`)} />}
           {tab === "settlements" && <Settlements state={state} onSale={() => openSale()} />}
           {tab === "statistics" && <Statistics state={state} />}
@@ -561,7 +493,7 @@ function StatisticsTable({ title, subtitle, headers, rows, empty }: { title: str
 
 function Metric({ icon, tone, label, value, note }: { icon: React.ReactNode; tone: string; label: string; value: React.ReactNode; note: string }) { return <article className="metric"><span className={`metric-icon ${tone}`}>{icon}</span><span>{label}</span><strong>{value}</strong><small>{note}</small></article>; }
 
-function Runs({ state, onChange, onRun, onEdit }: { state: LootState; onChange: (next: LootState, action?: string) => void; onRun: () => void; onEdit: (run: DungeonRun) => void }) {
+function Runs({ guildId, state, onChange, onRun, onEdit }: { guildId:string; state: LootState; onChange: (next: LootState, action?: string) => void; onRun: () => void; onEdit: (run: DungeonRun) => void }) {
   const [pendingDelete, setPendingDelete] = useState<DungeonRun | null>(null);
   const [query, setQuery] = useState("");
   const [runDate, setRunDate] = useState("");
@@ -587,7 +519,7 @@ function Runs({ state, onChange, onRun, onEdit }: { state: LootState; onChange: 
   };
   return <><PageTitle eyebrow="RUN HISTORY" title="Dungeon runs" text="Review each party and see which loot has already been sold." action={<button className="primary" onClick={onRun}><Plus size={17} /> Add dungeon run</button>} /><div className="run-filter-bar"><div className="run-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search run, loot, or member…" aria-label="Search dungeon runs" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear run search"><X size={15} /></button>}</div><label className="run-date-filter"><span>Date</span><input type="date" value={runDate} onChange={(event) => setRunDate(event.target.value)} aria-label="Filter dungeon runs by date" /></label>{filtersActive && <button type="button" className="clear-run-filters" onClick={() => { setQuery(""); setRunDate(""); }}><X size={14} /> Clear filters</button>}<span className="run-result-count">{shownRuns.length} of {state.runs.length} runs</span></div>{shownRuns.length === 0 ? <div className="empty run-filter-empty"><span><Search size={26} /></span><h2>No dungeon runs found</h2><p>Try another run, loot, member, or date.</p>{filtersActive && <button type="button" className="secondary" onClick={() => { setQuery(""); setRunDate(""); }}>Clear filters</button>}</div> : <div className="run-stack">{shownRuns.map((run) => {
     const locked = runHasSales(run);
-    return <article className={`run-card ${locked ? "locked" : ""}`} key={run.id}><div className="run-date"><strong>{new Date(run.createdAt).getDate()}</strong><span>{new Date(run.createdAt).toLocaleString("en", { month: "short" })}</span></div><div className="run-main"><div className="run-title"><div><div className="run-heading"><h2>{run.dungeon}</h2>{locked && <span className="run-locked"><Lock size={11} /> Sale recorded · Run locked</span>}</div><span>{dateTime.format(new Date(run.createdAt))} · Added by {run.createdBy ?? "Unknown"}</span></div><div className="run-actions"><button className="icon-button" disabled={locked} title={locked ? "This run cannot be edited because some loot has been sold" : "Edit run"} aria-label={`Edit ${run.dungeon}`} onClick={() => onEdit(run)}><Pencil size={15} /></button><button className="icon-button danger" disabled={locked} title={locked ? "This run cannot be deleted because some loot has been sold" : "Delete run"} aria-label={`Delete ${run.dungeon}`} onClick={() => setPendingDelete(run)}><Trash2 size={16} /></button></div></div><div className="run-section"><label>Party</label><div className="chips">{run.memberIds.map((id) => <span className="member-chip" key={id}>{state.members.find((m) => m.id === id)?.name ?? "Unknown"}</span>)}</div></div><div className="run-section"><label>Loot</label><div className="loot-grid">{run.loots.map((loot) => <EditableLoot key={loot.id} loot={loot} soldQuantity={soldByLoot.get(`${run.id}:${loot.id}`) ?? 0} locked={locked} onChange={(updated) => onChange({ ...state, runs: state.runs.map((candidate) => candidate.id === run.id ? { ...candidate, loots: candidate.loots.map((entry) => entry.id === loot.id ? updated : entry) } : candidate) }, `Edited ${loot.name || "a loot item"}`)} />)}</div></div></div></article>;
+    return <article className={`run-card ${locked ? "locked" : ""}`} key={run.id}><div className="run-date"><strong>{new Date(run.createdAt).getDate()}</strong><span>{new Date(run.createdAt).toLocaleString("en", { month: "short" })}</span></div><div className="run-main"><div className="run-title"><div><div className="run-heading"><h2>{run.dungeon}</h2>{locked && <span className="run-locked"><Lock size={11} /> Sale recorded · Run locked</span>}</div><span>{dateTime.format(new Date(run.createdAt))} · Added by {run.createdBy ?? "Unknown"}</span></div><div className="run-actions"><RunShareButton run={run} guildId={guildId}/><button className="icon-button" disabled={locked} title={locked ? "This run cannot be edited because some loot has been sold" : "Edit run"} aria-label={`Edit ${run.dungeon}`} onClick={() => onEdit(run)}><Pencil size={15} /></button><button className="icon-button danger" disabled={locked} title={locked ? "This run cannot be deleted because some loot has been sold" : "Delete run"} aria-label={`Delete ${run.dungeon}`} onClick={() => setPendingDelete(run)}><Trash2 size={16} /></button></div></div><div className="run-section"><label>Party</label><div className="chips">{run.memberIds.map((id) => <span className="member-chip" key={id}>{state.members.find((m) => m.id === id)?.name ?? "Unknown"}</span>)}</div></div><div className="run-section"><label>Loot</label><div className="loot-grid">{run.loots.map((loot) => <EditableLoot key={loot.id} loot={loot} soldQuantity={soldByLoot.get(`${run.id}:${loot.id}`) ?? 0} locked={locked} onChange={(updated) => onChange({ ...state, runs: state.runs.map((candidate) => candidate.id === run.id ? { ...candidate, loots: candidate.loots.map((entry) => entry.id === loot.id ? updated : entry) } : candidate) }, `Edited ${loot.name || "a loot item"}`)} />)}</div></div></div></article>;
   })}</div>}{pendingDelete && <ConfirmModal title="Delete dungeon run?" text={`Delete ${pendingDelete.dungeon} and its party and loot record? This can change inventory totals and future salary eligibility.`} onCancel={() => setPendingDelete(null)} onConfirm={removeRun} />}</>;
 }
 
