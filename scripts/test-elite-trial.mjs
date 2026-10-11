@@ -31,8 +31,14 @@ await db.query("update public.loot_manager_accounts set elite_trial_started_at=n
 // Even before another operation cleans up the assigned plan, timestamp enforcement has expired.
 assert.equal((await db.query('select public.loot_manager_effective_plan($1) plan',[users[0].id])).rows[0].plan,'Free');
 assert.deepEqual(await op('public_shop',null),[]);
-const ended=await op('account');assert.equal(ended.plan,'Free');assert.deepEqual(ended.limits,{runs:5,managers:0,playgrounds:1});
+const ended=await op('account');assert.equal(ended.plan,'Free');assert.deepEqual(ended.limits,{runs:200,managers:0,playgrounds:1});
 const originalLedger=(await db.query('select payload from public.loot_manager_ledgers where guild_id=$1',[uuid(20)])).rows[0].payload;assert.equal(originalLedger.runs[0].loots[0].quantity,12);
+const fullState={...originalLedger,runs:Array.from({length:200},(_,i)=>({id:'run-'+i,dungeon:'Test dungeon',createdAt:new Date().toISOString(),memberIds:['member'],loots:[{id:'loot-'+i,name:'Sunstone',quantity:1}]}))};
+assert.equal((await op('ledger_save',users[0],{version:0,state:fullState,notifications:[]},uuid(20))).version,1);
+assert.equal((await op('ledger_save',users[0],{version:1,state:{...fullState,runs:[...fullState.runs,{...fullState.runs[0],id:'run-201'}]},notifications:[]},uuid(20)))._error.status,403);
+await db.query('update public.loot_manager_accounts set limit_overrides=$2 where id=$1',[users[0].id,JSON.stringify({runs:77})]);
+assert.equal((await op('account')).limits.runs,77);
+await db.query("update public.loot_manager_accounts set limit_overrides='{}' where id=$1",[users[0].id]);
 assert.equal((await op('elite_trial_notice')).expired,true);assert.equal((await op('elite_trial_notice')).expired,false);
 assert.equal((await op('elite_trial_start'))._error.status,409);
 const admin=users[5];const assign=async(user,plan,extra={})=>op('platform_update',admin,{userId:user.id,plan,overrides:{},banned:false,paused:false,pausedUntil:null,...extra});
@@ -49,4 +55,5 @@ const page=await op('platform_users_page',admin,{page:1,query:''});assert.ok(pag
 await db.exec('reset role;set role authenticated');await assert.rejects(()=>op('elite_trial_start'),/permission denied/);
 console.log('PASS: exact 15-day once-only trial, eligibility, Elite entitlements, automatic Free fallback, retained data, one-time notice, manual upgrades and admin settings.');
 }catch(e){console.error({message:e.message,position:e.position,internalPosition:e.internalPosition,internalQuery:e.internalQuery,where:e.where});process.exitCode=1;}finally{await db.close();}
+
 
