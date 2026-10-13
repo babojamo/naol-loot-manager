@@ -1,4 +1,5 @@
 "use client";
+import {Reports} from './reports';
 import {RunShareButton} from './run-share';
 import {resolveSaleAllocations,soldQuantitiesByRunLoot} from '../../lib/sale-allocations';
 import {PlanRequest} from './plan-request';
@@ -42,7 +43,7 @@ import {PlaygroundSwitcher} from './playground-switcher';
 import { PenyaAmount, PenyaCoin } from "./penya";
 
 
-type Tab = "dashboard" | "runs" | "inventory" | "settlements" | "statistics" | "search";
+type Tab = "dashboard" | "runs" | "inventory" | "settlements" | "statistics" | "search" | "reports";
 const tabPaths: Record<Tab, string> = {
   dashboard: "/overview",
   runs: "/dungeon-runs",
@@ -50,6 +51,7 @@ const tabPaths: Record<Tab, string> = {
   settlements: "/sales",
   statistics: "/statistics",
   search: "/member-search",
+  reports: "/reports",
 };
 const pathTabs = Object.fromEntries(Object.entries(tabPaths).map(([tab, path]) => [path, tab])) as Record<string, Tab>;
 type Flash = { type: "good" | "warn"; text: string } | null;
@@ -356,6 +358,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
     { id: "settlements", label: "Sales & salaries", icon: <Coins size={18} /> },
     { id: "statistics", label: "Statistics", icon: <BarChart3 size={18} /> },
     { id: "search", label: "Member search", icon: <Search size={18} /> },
+    { id: "reports", label: "Reports", icon: <ReceiptText size={18} /> },
   ];
 
   return (
@@ -385,6 +388,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
           {tab === "settlements" && <Settlements state={state} onSale={() => openSale()} />}
           {tab === "statistics" && <Statistics state={state} />}
           {tab === "search" && <MemberSearch state={state} />}
+          {tab === "reports" && <Reports state={state} guildId={currentGuild?.id??""} playground={currentGuild?.name??"Playground"} connected={connected}/> }
         </div>
       </section>
 
