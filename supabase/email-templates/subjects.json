@@ -1,0 +1,67 @@
+[
+  {
+    "file": "confirmation.html",
+    "template": "Confirm sign up",
+    "subject": "[NAOL] Welcome to NAOL — confirm your email"
+  },
+  {
+    "file": "invite.html",
+    "template": "Invite user",
+    "subject": "[NAOL] You’re invited to NAOL"
+  },
+  {
+    "file": "magic_link.html",
+    "template": "Magic link",
+    "subject": "[NAOL] Confirm your email and continue to NAOL"
+  },
+  {
+    "file": "email_change.html",
+    "template": "Change email address",
+    "subject": "[NAOL] Confirm your NAOL email change"
+  },
+  {
+    "file": "recovery.html",
+    "template": "Reset password",
+    "subject": "[NAOL] Reset your NAOL password"
+  },
+  {
+    "file": "reauthentication.html",
+    "template": "Reauthentication",
+    "subject": "[NAOL] Verify it’s you on NAOL"
+  },
+  {
+    "file": "password_changed_notification.html",
+    "template": "Password changed",
+    "subject": "[NAOL] Your NAOL password was changed"
+  },
+  {
+    "file": "email_changed_notification.html",
+    "template": "Email address changed",
+    "subject": "[NAOL] Your NAOL email address was changed"
+  },
+  {
+    "file": "phone_changed_notification.html",
+    "template": "Phone number changed",
+    "subject": "[NAOL] Your NAOL phone number was changed"
+  },
+  {
+    "file": "identity_linked_notification.html",
+    "template": "Sign-in method linked",
+    "subject": "[NAOL] A sign-in method was added to your NAOL account"
+  },
+  {
+    "file": "identity_unlinked_notification.html",
+    "template": "Sign-in method removed",
+    "subject": "[NAOL] A sign-in method was removed from your NAOL account"
+  },
+  {
+    "file": "mfa_factor_enrolled_notification.html",
+    "template": "Verification method added",
+    "subject": "[NAOL] A verification method was added to your NAOL account"
+  },
+  {
+    "file": "mfa_factor_unenrolled_notification.html",
+    "template": "Verification method removed",
+    "subject": "[NAOL] A verification method was removed from your NAOL account"
+  }
+]

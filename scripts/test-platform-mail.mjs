@@ -15,7 +15,7 @@ const blank={members:[],runs:[],sales:[],vendingPrices:{},lootImages:{},payoutQu
 for(const [u,n] of [[alice,100],[bob,101]])assert.ok(!(await op('guild_create',u,null,{id:id(n),name:`Playground ${n}`,slug:`playground-${n}`,isPublic:false,state:blank}))._error);
 
 const {transpileModule}=await import('typescript');
-const source=await readFile(new URL('../lib/platform-mail.ts',import.meta.url),'utf8');const {mailText,mailSubject,mailPayload,deliverMailBatch}=await import('data:text/javascript;base64,'+Buffer.from(transpileModule(source,{compilerOptions:{module:99,target:99}}).outputText).toString('base64'));
+const source=await readFile(new URL('../lib/platform-mail.ts',import.meta.url),'utf8');const {mailText,mailSubject,mailPayload,deliverMailBatch}=await import('data:text/javascript;base64,'+Buffer.from(transpileModule(source.replace("'./email-design.mjs'",JSON.stringify(new URL('../lib/email-design.mjs',import.meta.url).href)),{compilerOptions:{module:99,target:99}}).outputText).toString('base64'));
 const err=(v,status)=>assert.equal(v._error?.status,status,JSON.stringify(v));
 const update={userId:alice.id,plan:'Elite',banned:false,overrides:{}};
 err(await op('platform_update',bob,null,update),403);

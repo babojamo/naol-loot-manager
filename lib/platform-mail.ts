@@ -1,3 +1,4 @@
+import {renderNaolEmail,emailTextFooter} from './email-design.mjs';
 export type MailStatus='pending'|'sending'|'accepted'|'failed'|'unconfirmed';
 export type MailRecipient={position:number;accountId:string;name:string;email:string;providerId:string|null};
 export type MailJob={id:string;kind:'plan_change'|'manual';subject:string|null;message:string|null;oldPlan:string|null;newPlan:string|null;status:MailStatus;createdAt:string;actorName:string;error:string|null;count?:number;accepted?:number;recipients:MailRecipient[]};
@@ -14,13 +15,12 @@ export function mailText(job:Pick<MailJob,'kind'|'message'|'oldPlan'|'newPlan'>,
   if((rank[job.newPlan??'Free']??0)>(rank[job.oldPlan??'Free']??0))return `${greeting}\n\nWe’re happy to let you know that your NAOL plan has been upgraded from ${planName(job.oldPlan)} to ${planName(job.newPlan)}. Thank you for being part of our community and for supporting the adventures we share.\n\nWe truly appreciate your support. You can review your updated plan in Account Settings and continue managing your playgrounds at your own pace.\n\nIf you have any questions about this change, please reply to this email or contact us. We’ll be glad to help.\n\nWith appreciation,\nThe NAOL team`;
   return `${greeting}\n\nWe’re writing to let you know that your NAOL plan has changed from ${planName(job.oldPlan)} to ${planName(job.newPlan)}. We understand this may be disappointing, and we’re sorry for any inconvenience this change may cause.\n\nYour existing playground records are kept. The limits and features of your current plan now apply, and you can review your account in Account Settings. You remain a valued part of the NAOL community, and we’re grateful to have you with us.\n\nIf this change was unexpected or you would like to discuss your options, please reply to this email or contact us. We’ll be happy to listen and help.\n\nWith care and appreciation,\nThe NAOL team`;
 }
-function escape(value:string){return value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));}
 export function mailPayload(job:MailJob,from:string):MailPayload[]{
   return job.recipients.map(r=>{
     const subject=mailSubject(job),body=mailText(job,r.name);
-    const footer='NAOL · Where every drop makes someone jealous.\nhttps://naol.lokwensio.com\nContact us: https://naol.lokwensio.com/contact';
+    const footer=emailTextFooter;
     return {from,to:[r.email],reply_to:'kevin.loquencio@gmail.com',subject:'[NAOL] '+subject,text:body+'\n\n'+footer,
-      html:`<!doctype html><html><body style="margin:0;background:#f6f4ee;font-family:Arial,sans-serif;color:#242334"><div style="max-width:600px;margin:24px auto;padding:28px;background:#fff;border:1px solid #e6e0ed;border-radius:14px"><img src="https://naol.lokwensio.com/brand/naol-logo.png" width="100" alt="NAOL"><h1 style="font-size:22px;line-height:1.4">${escape(subject)}</h1><div style="font-size:15px;line-height:1.8;white-space:pre-wrap">${escape(body)}</div><p style="margin-top:28px"><a href="https://naol.lokwensio.com/account" style="color:#6556d8">Account Settings</a> · <a href="https://naol.lokwensio.com/contact" style="color:#6556d8">Contact NAOL</a></p><p style="font-size:11px;color:#777187">NAOL · Where every drop makes someone jealous.</p></div></body></html>`};
+      html:renderNaolEmail({title:subject,body,eyebrow:job.kind==='plan_change'?'YOUR NAOL PLAN':'A MESSAGE FROM NAOL',button:{text:job.kind==='plan_change'?'Review your plan':'Open NAOL',href:job.kind==='plan_change'?'https://naol.lokwensio.com/account':'https://naol.lokwensio.com/playgrounds'}})};
   });
 }
 export async function deliverMailBatch(id:string,payload:MailPayload[],key:string,send:typeof fetch=fetch):Promise<{status:'accepted'|'failed'|'unconfirmed';providerIds?:string[];error?:string}>{
