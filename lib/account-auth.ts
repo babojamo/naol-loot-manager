@@ -2,7 +2,7 @@ import {createServerClient} from '@supabase/ssr';
 import {cookies} from 'next/headers';
 import {redirect} from 'next/navigation';
 import {env} from 'cloudflare:workers';
-export type AccountUser={userId:string;email:string;displayName:string;fullName:string|null};
+export type AccountUser={userId:string;email:string;displayName:string;fullName:string|null;impersonatorId?:string;impersonationId?:string;impersonationSessionHash?:string};
 export function authConfig(){
   const url=env.NEXT_PUBLIC_SUPABASE_URL,key=env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if(!url||!key)throw new Error('Supabase authentication is not configured.');
@@ -18,6 +18,8 @@ export async function serverAuth(){
   });
 }
 export async function getAccountUser():Promise<AccountUser|null>{
+  const impersonation=(await cookies()).get('naol_impersonation')?.value;
+  if(impersonation){const {resolveImpersonation}=await import('./impersonation-server');try{return (await resolveImpersonation(impersonation)).user;}catch{return null;}}
   const client=await serverAuth();const {data:{user},error}=await client.auth.getUser();
   if(error||!user?.email)return null;
   return {userId:user.id,email:user.email,displayName:user.user_metadata?.name||user.email,fullName:user.user_metadata?.name??null};

@@ -1,0 +1,82 @@
+process.on('uncaughtException',e=>{console.error({message:e.message,code:e.code,position:e.position,where:e.where});process.exit(1);});
+import {PGlite} from '@electric-sql/pglite';
+import {readFile,readdir} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const db=new PGlite();
+await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb,encrypted_password text);`);
+const files=(await readdir(new URL('../supabase/',import.meta.url))).filter(f=>/^0\d\d_.*\.sql$/.test(f)).sort();
+for(const f of files){let sql=await readFile(new URL('../supabase/'+f,import.meta.url),'utf8');if(f.startsWith('020_'))sql=sql.replace(/^create extension if not exists pg_cron.*$/m,'').replace(/^select cron.schedule.*$/m,'');await db.exec(sql);}
+const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const [admin,alice,bob,charlie]=[1,2,3,4].map(n=>({id:id(n),email:n===1?'kevin.loquencio@gmail.com':`user${n}@example.com`,name:`User ${n}`}));
+for(const u of [admin,alice,bob,charlie])await db.query('insert into auth.users values($1,$2,now(),$3,null)',[u.id,u.email,JSON.stringify({name:u.name,username:`user${u.id.slice(-1)}`})]);
+await db.exec(`update public.loot_manager_accounts set platform_admin=true,email_verified=true where id='${admin.id}';set role service_role;`);
+const op=async(name,user,guild,data={})=>(await db.query('select public.loot_manager_operation($1,$2::jsonb,$3::uuid,$4::jsonb) result',[name,user?JSON.stringify(user):null,guild??null,JSON.stringify(data)])).rows[0].result;
+const blank={members:[],runs:[],sales:[],vendingPrices:{},lootImages:{},payoutQueue:[],auditLog:[]};
+for(const [u,n] of [[alice,100],[bob,101]])assert.ok(!(await op('guild_create',u,null,{id:id(n),name:`Playground ${n}`,slug:`playground-${n}`,isPublic:false,state:blank}))._error);
+
+const {transpileModule}=await import('typescript');
+const helperSource=await readFile(new URL('../lib/impersonation.ts',import.meta.url),'utf8');
+const helpers=await import('data:text/javascript;base64,'+Buffer.from(transpileModule(helperSource,{compilerOptions:{module:99,target:99}}).outputText).toString('base64'));
+const {impersonationHash,parseImpersonation,impersonationContext,impersonationMutationContextMatches,newImpersonationToken,verifiedAuthSessionHash}=helpers;
+const token=newImpersonationToken();assert.match(token,/^[a-f0-9]{64}$/);assert.notEqual(token,newImpersonationToken());
+const tokenHash=await impersonationHash(token),sessionHash=await impersonationHash('verified-session-one');
+const start={userId:alice.id,tokenHash,sessionHash};
+const err=(value,status)=>assert.equal(value._error?.status,status,JSON.stringify(value));
+err(await op('platform_impersonation_start',bob,null,start),403);
+err(await op('platform_impersonation_start',null,null,start),401);
+err(await op('platform_impersonation_start',admin,null,{...start,userId:admin.id}),400);
+err(await op('platform_impersonation_start',admin,null,{...start,tokenHash:'bad'}),400);
+
+let record=await op('platform_impersonation_start',admin,null,start);assert.ok(!record._error,JSON.stringify(record));assert.equal(record.user.userId,alice.id);assert.equal(record.target.username,'user2');
+const value=record.id+'.'+token;
+assert.deepEqual(parseImpersonation(value),{id:record.id,token});assert.equal(parseImpersonation(value+'x'),null);assert.equal(parseImpersonation('bad'),null);
+assert.equal(impersonationContext(undefined),'none');assert.equal(impersonationContext(value),record.id);
+assert.ok(impersonationMutationContextMatches(undefined,null));assert.ok(impersonationMutationContextMatches(undefined,'none'));
+assert.ok(impersonationMutationContextMatches(value,record.id));assert.ok(!impersonationMutationContextMatches(value,null));assert.ok(!impersonationMutationContextMatches(value,'none'));assert.ok(!impersonationMutationContextMatches(undefined,record.id));assert.ok(!impersonationMutationContextMatches(value,id(999)));
+const jwt=claims=>'e30.'+Buffer.from(JSON.stringify(claims)).toString('base64url')+'.verified-by-getUser-before-use';
+assert.equal(await verifiedAuthSessionHash(jwt({sub:admin.id,session_id:id(700)}),admin.id),await impersonationHash(id(700)));
+assert.equal(await verifiedAuthSessionHash(jwt({sub:alice.id,session_id:id(700)}),admin.id),null);
+assert.equal(await verifiedAuthSessionHash(jwt({sub:admin.id}),admin.id),null);
+assert.equal(await verifiedAuthSessionHash('malformed',admin.id),null);
+const binding={tokenHash,sessionHash};
+assert.equal((await op('platform_impersonation_resolve',admin,null,binding)).id,record.id);
+err(await op('platform_impersonation_resolve',bob,null,binding),403);
+err(await op('platform_impersonation_resolve',admin,null,{...binding,sessionHash:await impersonationHash('another-browser')}),403);
+err(await op('platform_impersonation_resolve',admin,null,{...binding,tokenHash:await impersonationHash('different-token')}),403);
+const acting={id:alice.id,email:alice.email,name:alice.name,impersonatorId:admin.id,impersonationId:record.id,impersonationSessionHash:sessionHash};
+assert.equal((await op('account',acting)).id,alice.id);
+assert.equal((await op('guild_context',acting,id(100))).role,'owner');
+err(await op('guild_context',acting,id(101)),403);
+for(const operation of ['platform_users_page','platform_supporter_get','platform_update','platform_impersonation_start','account_delete','account_change_gate','account_profile_check'])err(await op(operation,acting,null,{...start,userId:bob.id}),403);
+const saved=await op('settings_update',acting,id(100),{name:'Support assisted playground',description:'',shopEnabled:true,inquiriesEnabled:true});assert.ok(!saved._error,JSON.stringify(saved));
+let events=(await db.query('select operation from public.loot_manager_impersonation_events where impersonation_id=$1 order by id',[record.id])).rows.map(r=>r.operation);
+assert.deepEqual(events,['started','settings_update']);
+const stored=(await db.query('select * from public.loot_manager_impersonations where id=$1',[record.id])).rows[0];assert.equal(stored.token_hash,tokenHash);assert.notEqual(stored.token_hash,token);assert.equal(stored.admin_id,admin.id);assert.equal(stored.target_id,alice.id);
+await op('platform_impersonation_end',admin,null,{...binding,sessionHash:await impersonationHash('another-browser')});assert.equal((await op('platform_impersonation_resolve',admin,null,binding)).id,record.id);
+await op('platform_impersonation_end',admin,null,binding);err(await op('platform_impersonation_resolve',admin,null,binding),403);err(await op('account',acting),403);
+events=(await db.query('select operation from public.loot_manager_impersonation_events where impersonation_id=$1 order by id',[record.id])).rows.map(r=>r.operation);assert.deepEqual(events,['started','settings_update','exited']);
+// Replacing one session does not interfere with other browsers.
+const second=await op('platform_impersonation_start',admin,null,{...start,tokenHash:await impersonationHash('second')});
+const other=await op('platform_impersonation_start',admin,null,{...start,sessionHash:await impersonationHash('browser-two'),tokenHash:await impersonationHash('other')});
+const third=await op('platform_impersonation_start',admin,null,{...start,tokenHash:await impersonationHash('third')});
+err(await op('platform_impersonation_resolve',admin,null,{...binding,tokenHash:await impersonationHash('second')}),403);
+assert.equal((await op('platform_impersonation_resolve',admin,null,{sessionHash:await impersonationHash('browser-two'),tokenHash:await impersonationHash('other')})).id,other.id);
+await db.exec('reset role;');await db.query("update public.loot_manager_impersonations set expires_at=now()-interval '1 second' where id=$1",[third.id]);await db.exec('set role service_role;');
+err(await op('platform_impersonation_resolve',admin,null,{...binding,tokenHash:await impersonationHash('third')}),403);
+// Revoking either user's access or promoting the target blocks an existing session immediately.
+const fourth=await op('platform_impersonation_start',admin,null,{...start,tokenHash:await impersonationHash('fourth')});const fourthBinding={...binding,tokenHash:await impersonationHash('fourth')};
+for(const sql of ["update public.loot_manager_accounts set banned=true where id=$1","update public.loot_manager_accounts set deletion_requested_at=now() where id=$1","update public.loot_manager_accounts set platform_admin=true where id=$1"]){
+  await db.exec('reset role;');await db.query(sql,[alice.id]);await db.exec('set role service_role;');
+  err(await op('platform_impersonation_resolve',admin,null,fourthBinding),403);
+  err(await op('platform_impersonation_start',admin,null,{...start,tokenHash:await impersonationHash(sql)}),400);
+  await db.exec('reset role;');await db.query('update public.loot_manager_accounts set banned=false,deletion_requested_at=null,platform_admin=false where id=$1',[alice.id]);await db.exec('set role service_role;');
+}
+await db.exec('reset role;');await db.query('update public.loot_manager_accounts set platform_admin=false where id=$1',[admin.id]);await db.exec('set role service_role;');
+err(await op('platform_impersonation_resolve',admin,null,fourthBinding),403);
+err(await op('account',{...acting,impersonationId:fourth.id}),403);
+assert.ok((await op('platform_impersonation_end',admin,null,fourthBinding)).ok);
+await db.exec('reset role;');await db.exec(await readFile(new URL('../supabase/024_admin_impersonation.sql',import.meta.url),'utf8'));await db.exec('set role authenticated;');
+await assert.rejects(()=>db.query('select * from public.loot_manager_impersonations'));
+await assert.rejects(()=>db.query('select * from public.loot_manager_impersonation_events'));
+await assert.rejects(()=>op('platform_impersonation_start',admin,null,start));
+await db.close();console.log('Impersonation permissions, session binding, expiry, exit, audit, target restrictions and stale-tab protections passed.');

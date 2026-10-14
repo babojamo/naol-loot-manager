@@ -1,3 +1,4 @@
+import {assertNotImpersonating} from '../../../../lib/impersonation-server';
 import {z} from 'zod';
 import {cookies} from 'next/headers';
 import {serverAuth} from '../../../../lib/account-auth';
@@ -19,10 +20,10 @@ async function confirmPassword(user:AccountUser,value:string){
 }
 export async function GET(request:Request){return api(async()=>{
   const user=await identity();const a=await database<{name:string;username:string;email:string;email_verified:boolean;plan:string}>('account',user);
-  return json({name:a.name,username:a.username,email:a.email,email_verified:a.email_verified,plan:a.plan});
+  return json({name:a.name,username:a.username,email:a.email,email_verified:a.email_verified,plan:a.plan,impersonating:!!user.impersonationId});
 },request);}
 export async function PUT(request:Request){return api(async()=>{
-  checkMutation(request);const user=await identity();
+  checkMutation(request);await assertNotImpersonating();const user=await identity();
   const parsed=updates.safeParse(await readBody(request));if(!parsed.success)throw new ApiError(400,'Check the name, username, email and password requirements.');
   const d=parsed.data;await database('account_change_gate',user);
   if(d.action==='profile'){
@@ -44,7 +45,7 @@ export async function PUT(request:Request){return api(async()=>{
   return json({ok:true,message:'Email change requested. Check the confirmation messages sent to your email addresses and follow their links. Your new email is used after confirmation.'});
 },request);}
 export async function DELETE(request:Request){return api(async()=>{
-  checkMutation(request);const user=await identity();
+  checkMutation(request);await assertNotImpersonating();const user=await identity();
   const parsed=z.object({confirmation:z.string().min(3).max(30),currentPassword:password}).strict().safeParse(await readBody(request));
   if(!parsed.success)throw new ApiError(400,'Enter your current password and exact username to confirm deletion.');
   await database('account_change_gate',user);const client=await confirmPassword(user,parsed.data.currentPassword);

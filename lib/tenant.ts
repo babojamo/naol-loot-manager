@@ -1,3 +1,4 @@
+import {impersonationCookie,impersonationMutationContextMatches} from './impersonation';
 import { getAccountUser } from "./account-auth";
 import { database } from './supabase-store';
 import type { AccountUser } from './account-auth';
@@ -31,6 +32,9 @@ export function requireAdmin(guild: Guild) {
 }
 export function checkMutation(request: Request) {
   if (['GET','HEAD','OPTIONS'].includes(request.method)) return;
+  const context=request.headers.get('X-NAOL-Context');
+  const value=(request.headers.get('cookie')??'').split(';').map(v=>v.trim()).find(v=>v.startsWith(impersonationCookie+'='))?.slice(impersonationCookie.length+1);
+  if(!impersonationMutationContextMatches(value,context))throw new ApiError(409,'Your account context changed. Reload this page before making changes.');
   const origin = request.headers.get('origin');
   if (origin && origin !== new URL(request.url).origin) throw new ApiError(403,'Use this website to make changes.');
 }

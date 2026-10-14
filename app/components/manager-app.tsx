@@ -346,7 +346,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
     } catch (error) { setFlash({type:"warn",text:error instanceof Error ? error.message : "Could not save your changes."}); }
     finally { savingRef.current=false; setSaving(false); }
   };
-  const logout = async () => { await fetch("/api/account/logout", {method:"POST"}); window.location.assign("/login"); };
+  const logout = async () => {const response=await fetch("/api/account/logout",{method:"POST"});if(!response.ok)return;const data=await response.json() as {impersonationEnded?:boolean;next?:string};window.location.assign(data.next||"/login");};
 
   const openSale = (lootName = "") => {
     setSaleLootName(lootName);

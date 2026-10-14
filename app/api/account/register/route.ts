@@ -1,3 +1,4 @@
+import {assertNotImpersonating} from '../../../../lib/impersonation-server';
 import {createClient} from '@supabase/supabase-js';
 import {env} from 'cloudflare:workers';
 import {z} from 'zod';
@@ -5,7 +6,7 @@ import {api,checkMutation,json,ApiError,tokenHash} from '../../../../lib/tenant'
 import {database} from '../../../../lib/supabase-store';
 const schema=z.object({name:z.string().trim().min(2).max(80),username:z.string().trim().toLowerCase().min(3).max(30),email:z.string().trim().toLowerCase().email().max(254),password:z.string().min(8).max(128)});
 export async function POST(request:Request){return api(async()=>{
-  checkMutation(request);
+  checkMutation(request);await assertNotImpersonating();
   const text=await request.text();if(text.length>4096)throw new ApiError(400,'Registration details are too long.');
   let body:unknown;try{body=JSON.parse(text);}catch{throw new ApiError(400,'Check your registration details.');}
   const parsed=schema.safeParse(body);if(!parsed.success)throw new ApiError(400,'Enter a valid name, username, email and password.');

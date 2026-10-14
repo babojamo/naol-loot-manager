@@ -1,3 +1,4 @@
+import {assertNotImpersonating} from '../../../../lib/impersonation-server';
 import {z} from 'zod';
 import {cookies} from 'next/headers';
 import {serverAuth} from '../../../../lib/account-auth';
@@ -7,7 +8,7 @@ import {recoverySession} from '../../../../lib/password-recovery-server';
 import {recoveryCookie} from '../../../../lib/password-recovery';
 async function body(request:Request){const text=await request.text();if(text.length>1024)throw new ApiError(400,'The request is too long.');try{return JSON.parse(text);}catch{throw new ApiError(400,'Check your details.');}}
 export async function POST(request:Request){return api(async()=>{
-  checkMutation(request);const parsed=z.object({email:z.string().trim().toLowerCase().email().max(254)}).strict().safeParse(await body(request));
+  checkMutation(request);await assertNotImpersonating();const parsed=z.object({email:z.string().trim().toLowerCase().email().max(254)}).strict().safeParse(await body(request));
   if(!parsed.success)throw new ApiError(400,'Enter a valid email address.');
   const bucket=await tokenHash('password-reset:'+(request.headers.get('cf-connecting-ip')||request.headers.get('x-real-ip')||'unknown'));
   await database('contact_gate',undefined,undefined,{bucket});
@@ -16,7 +17,7 @@ export async function POST(request:Request){return api(async()=>{
   return json({ok:true,message:'If an account uses this email address, a password reset link will arrive shortly. Check your inbox and spam folder, then open it in this browser.'});
 },request);}
 export async function PUT(request:Request){return api(async()=>{
-  checkMutation(request);const parsed=z.object({password:z.string().min(8).max(128)}).strict().safeParse(await body(request));
+  checkMutation(request);await assertNotImpersonating();const parsed=z.object({password:z.string().min(8).max(128)}).strict().safeParse(await body(request));
   if(!parsed.success)throw new ApiError(400,'Choose a password of 8–128 characters.');
   const recovery=await recoverySession();if(!recovery)throw new ApiError(403,'This recovery session is missing or expired. Request a new password reset link.');
   await database('account',recovery.user);await database('account_change_gate',recovery.user);
