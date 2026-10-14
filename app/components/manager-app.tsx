@@ -274,6 +274,7 @@ function Logo({ name = "NAOL",icon }: { name?: string;icon?:string|null }) {
 export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: Tab }) {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [currentUser, setCurrentUser] = useState("");
+  const [accountPlan,setAccountPlan]=useState<'Free'|'Elite'|'Legend'|null>(null);
   const [currentGuild, setCurrentGuild] = useState<{ id: string; name: string; slug: string;icon?:string|null } | null>(null);
   const guildIdRef = useRef("");
   const versionRef = useRef(0);
@@ -310,10 +311,10 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
     }
   }, []);
   useEffect(() => {
-    fetch("/api/auth/status", { credentials: "same-origin", cache: "no-store" }).then(r => r.json() as Promise<{ authenticated: boolean; username?: string; guild?: { id: string; name: string; slug: string } }>).then(data => {
+    fetch("/api/auth/status", { credentials: "same-origin", cache: "no-store" }).then(r => r.json() as Promise<{ authenticated: boolean; username?: string; plan?:'Free'|'Elite'|'Legend'; guild?: { id: string; name: string; slug: string } }>).then(data => {
       if (!data.authenticated) { window.location.replace("/login"); return; }
       if (!data.guild) { window.location.replace("/playgrounds"); return; }
-      guildIdRef.current = data.guild.id; setCurrentGuild(data.guild); setCurrentUser(data.username ?? "Manager"); void load();
+      guildIdRef.current = data.guild.id; setCurrentGuild(data.guild); setCurrentUser(data.username ?? "Manager"); setAccountPlan(data.plan??null); void load();
     }).catch(() => window.location.replace("/login"));
   }, [load]);
   useEffect(() => {
@@ -365,9 +366,9 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
     <main className="app-shell">
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
         <div className="sidebar-top"><Logo name={currentGuild?.name} icon={currentGuild?.icon}/><button className="icon-button close-nav" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
-        <PlaygroundSwitcher currentId={currentGuild?.id} disabled={saving||showRun||showSale}/><nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}<a href={`/shop?playground=${currentGuild?.slug ?? ""}`}><Store size={18}/><span>Public shop</span></a><a href={`/inquiries?playground=${currentGuild?.slug ?? ""}`}><Search size={18}/><span>Public inquiries</span></a></nav>
+        <PlaygroundSwitcher currentId={currentGuild?.id} disabled={saving||showRun||showSale}/><nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}</nav>
         <div className="sidebar-note"><Sparkles size={16} /><div><strong>Fair payout queue</strong><span>Oldest waiting member is shown first.</span></div></div>
-        <div className="sidebar-footer"><PlanRequest sidebar/><a href="/guide"><Sparkles size={17}/><span>App guide</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>
+        <div className="sidebar-footer">{accountPlan==='Free'&&<PlanRequest sidebar currentPlan={accountPlan}/>}<a href="/guide"><Sparkles size={17}/><span>Help</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>
       </aside>
       {mobileNav && <button className="scrim" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
 
@@ -375,6 +376,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
         <header className="topbar">
           <button className="icon-button menu-button" onClick={() => setMobileNav(true)}><Menu size={21} /></button>
           <div className="breadcrumb"><a href="/playgrounds">{currentGuild?.name ?? "Playground operations"}</a><ChevronRight size={14} /><strong>{nav.find((item) => item.id === tab)?.label}</strong></div>
+          <nav className="workspace-public-nav" aria-label="Playground public pages"><a href={`/shop?playground=${encodeURIComponent(currentGuild?.slug??'')}`}><Store size={16}/><span>Public Shop</span></a><a href={`/inquiries?playground=${encodeURIComponent(currentGuild?.slug??'')}`}><Search size={16}/><span>Public Inquiries</span></a></nav>
           <div className="user-badge"><span>{currentUser.slice(0, 2).toUpperCase()}</span><div><small>Signed in as</small><strong>{currentUser}</strong></div></div>
           <div className={`sync ${connected ? "online" : "local"}`}><span />{saving ? "Saving…" : connected ? "Playground synced" : "Load failed"}</div>
           <button className="primary top-action" onClick={() => setShowRun(true)}><Plus size={17} /> New run</button>
