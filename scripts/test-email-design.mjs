@@ -22,7 +22,11 @@ assert.equal(await sendInvitationEmail(invite,async(url,init)=>{const payload=JS
 assert.equal(await sendContactEmail(contact,async(url,init)=>{const payload=JSON.parse(init.body);assert.deepEqual(payload.to,['kevin.loquencio@gmail.com']);assert.equal(payload.reply_to,contact.email);assert.equal(init.headers['Idempotency-Key'],'naol-contact-'+contact.requestId);assert.ok(payload.html);return Response.json({id:'accepted'});}),true);
 assert.deepEqual(await sendRunShareEmails(run,async(url,init)=>{const payload=JSON.parse(init.body);assert.equal(payload.length,2);assert.deepEqual(payload.map(p=>p.to),run.emails.map(email=>[email]));assert.ok(payload.every(p=>p.html&&p.text));return Response.json({data:[{id:'one'},{}]});}),['two@example.com']);
 const config=JSON.parse(await readFile(new URL('../supabase/email-templates/auth-email-design.json',import.meta.url),'utf8'));assert.equal(Object.keys(config).length,26);
-for(const [key,value] of Object.entries(config)){assert.ok(/^mailer_(subjects_[a-z_]+|templates_[a-z_]+_content)$/.test(key));assert.ok(!key.includes('_enabled'));if(key.endsWith('_content')){assert.match(value,/naol-email-card/);assert.match(value,/Contact NAOL/);assert.ok(!value.includes('TokenHash'));}}
-for(const key of ['confirmation','invite','magic_link','email_change','recovery'])assert.equal(config['mailer_templates_'+key+'_content'].split('{{ .ConfirmationURL }}').length-1,3);
+for(const [key,value] of Object.entries(config)){assert.ok(/^mailer_(subjects_[a-z_]+|templates_[a-z_]+_content)$/.test(key));assert.ok(!key.includes('_enabled'));if(key.endsWith('_content')){assert.match(value,/naol-email-card/);assert.match(value,/Contact NAOL/);if(key!=='mailer_templates_recovery_content')assert.ok(!value.includes('TokenHash'));}}
+for(const key of ['confirmation','invite','magic_link','email_change'])assert.equal(config['mailer_templates_'+key+'_content'].split('{{ .ConfirmationURL }}').length-1,3);
 assert.match(config.mailer_templates_reauthentication_content,/{{ \.Token }}/);assert.match(config.mailer_templates_email_change_content,/{{ \.NewEmail }}/);assert.match(config.mailer_templates_email_changed_notification_content,/{{ \.OldEmail }}/);
 console.log('All app email designs, HTML escaping, secure links, recipient privacy, transport contracts and 13 Supabase template placeholders passed. No real emails sent.');
+
+assert.equal(config.mailer_templates_recovery_content.split('{{ .TokenHash }}').length-1,3);
+assert.ok(config.mailer_templates_recovery_content.includes('https://naol.lokwensio.com/auth/confirm?token_hash={{ .TokenHash }}&amp;type=recovery'));
+assert.ok(!config.mailer_templates_recovery_content.includes('{{ .ConfirmationURL }}'));

@@ -17,12 +17,22 @@ The script backs up existing subjects/templates in `outputs/email-template-backu
 To validate the local package without credentials or network calls:
 
 ```powershell
-& D:/codes/loot-manager/scripts/apply-auth-email-design.ps1 -ValidateOnly
+node D:/codes/loot-manager/scripts/apply-auth-email-design.mjs --validate-only
 ```
 
 ## Apply manually instead
 
-Open [NAOL’s Supabase Email Templates](https://supabase.com/dashboard/project/jpevnyalkjzfjtsqkagp/auth/templates). For each template listed in `subjects.json`, copy its subject and the full contents of its matching `.html` file. Keep `{{ .ConfirmationURL }}`, `{{ .Token }}` and the other provider placeholders unchanged.
+Open [NAOL’s Supabase Email Templates](https://supabase.com/dashboard/project/jpevnyalkjzfjtsqkagp/auth/templates). For each template listed in `subjects.json`, copy its subject and the full contents of its matching `.html` file. Keep `{{ .ConfirmationURL }}`, `{{ .TokenHash }}`, `{{ .Token }}` and the other provider placeholders unchanged.
+
+## Branded password-reset link
+
+After deploying the `/auth/confirm` endpoint, update only the password-reset subject and HTML:
+
+```powershell
+node D:/codes/loot-manager/scripts/apply-auth-email-design.mjs --recovery-only
+```
+
+The recovery button and copyable link use `https://naol.lokwensio.com/auth/confirm?token_hash={{ .TokenHash }}&type=recovery`. The server verifies the token with Supabase, checks the account and creates the existing 15-minute session-bound recovery grant before redirecting to `/reset-password`. Invalid or expired links return to the reset request page. The legacy `/auth/callback` remains available for previously sent emails. No SQL migration or redirect allow-list change is required for this direct verification endpoint. Other Auth templates continue to use their existing links.
 
 Six authentication templates are included: signup confirmation, Auth account invitation, magic link/email verification, email-change confirmation, password reset and reauthentication. Seven security-notification templates are included for password, email, phone, sign-in-method and verification-method changes. Optional notifications remain enabled or disabled according to the project’s existing settings.
 

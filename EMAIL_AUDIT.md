@@ -16,7 +16,7 @@ All application messages have both readable plain text and HTML. User-controlled
 
 The app uses Supabase for email verification/magic links, password resets and email-change confirmations. A matching 13-template package also covers signup, Auth invitations, reauthentication and optional security notices. Applying it requires the Supabase dashboard or Management API; website publishing alone cannot update these settings. See `supabase/email-templates/README.md`.
 
-Existing `ConfirmationURL` and OTP placeholders remain intact. The application’s recovery grants, PKCE callback, signup/invitation continuation and email-change checks were not replaced. No authentication redirects, SMTP settings or notification enablement flags are changed by the design package.
+The password-reset template uses a NAOL `/auth/confirm` link with Supabase’s `TokenHash` placeholder. Only recovery tokens are accepted there; the existing account checks and session-bound recovery grant still protect password changes. The old PKCE callback remains for previously sent links. Other `ConfirmationURL` and OTP placeholders, signup/invitation continuation and email-change checks remain intact. No SMTP settings or notification enablement flags are changed by the design package.
 
 ## Verification and scope
 

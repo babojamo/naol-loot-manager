@@ -28,7 +28,7 @@ try {
     $backup | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backupPath -Encoding utf8
     foreach ($kind in @('confirmation','invite','magic_link','email_change','recovery')) {
         $existing = $current.("mailer_templates_" + $kind + "_content")
-        if ($existing -and ($existing -notmatch '{{\s*\.ConfirmationURL\s*}}' -or $existing -match '{{\s*\.TokenHash')) {
+        if ($existing -and $existing -cne $patch.("mailer_templates_" + $kind + "_content") -and ($existing -notmatch '{{\s*\.ConfirmationURL\s*}}' -or $existing -match '{{\s*\.TokenHash')) {
             throw "The existing $kind template uses custom authentication links. No templates were changed. Review the backup and preserve those links when applying the matching design manually."
         }
     }
