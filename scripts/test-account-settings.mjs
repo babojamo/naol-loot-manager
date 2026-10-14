@@ -20,6 +20,16 @@ assert.equal((await op('platform_supporter_save',alice,null,{userId:alice.id,gui
 assert.equal((await op('platform_supporter_save',admin,null,{userId:alice.id,guildId:id(101),published:true,badge:'Supporter',featured:true}))._error.status,400);
 assert.ok(!(await op('platform_supporter_save',admin,null,{userId:alice.id,guildId:id(100),published:true,badge:'Supporter',featured:true,featuredOrder:5}))._error);
 assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).featured,true);
+assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).sidebarBadgeEnabled,false);
+assert.equal((await op('platform_supporter_save',bob,null,{userId:alice.id,guildId:id(100),published:true,badge:'Supporter',sidebarBadgeEnabled:true}))._error.status,403);
+assert.ok(!(await op('platform_supporter_save',admin,null,{userId:alice.id,guildId:id(100),published:true,badge:'Supporter',featured:true,featuredOrder:5,sidebarBadgeEnabled:true}))._error);
+assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).sidebarBadgeEnabled,true);
+assert.ok(!(await op('platform_supporter_save',admin,null,{userId:alice.id,guildId:id(100),published:true,badge:'Supporter',featured:true,featuredOrder:5}))._error);
+assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).sidebarBadgeEnabled,true);
+assert.ok(!(await op('platform_supporter_save',admin,null,{userId:alice.id,guildId:id(100),published:true,badge:'Supporter',featured:true,featuredOrder:5,sidebarBadgeEnabled:false}))._error);
+assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).sidebarBadgeEnabled,false);
+assert.ok(!(await op('platform_supporter_save',admin,null,{userId:charlie.id,guildId:null,published:false,badge:'Elite Supporter',sidebarBadgeEnabled:true}))._error);
+assert.equal((await op('platform_supporter_get',admin,null,{userId:charlie.id})).sidebarBadgeEnabled,true);
 const featured=await op('supporters_featured');assert.equal(featured.length,1);assert.ok(!JSON.stringify(featured).includes(alice.email));
 // A supporter can showcase an actual manager membership, including both public surfaces.
 await db.exec('reset role;');await db.query("insert into public.loot_manager_guild_users(guild_id,user_id,role) values($1,$2,'manager')",[id(100),charlie.id]);await db.exec('set role service_role;');
