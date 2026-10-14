@@ -2,6 +2,8 @@
 import {Reports} from './reports';
 import {RunShareButton} from './run-share';
 import {resolveSaleAllocations,soldQuantitiesByRunLoot} from '../../lib/sale-allocations';
+import {SupporterEmblem} from './supporter-emblem';
+import {planLabel,type SupporterBadge} from '../../lib/support';
 import {PlanRequest} from './plan-request';
 import {PlaygroundIcon} from './playground-icon';
 import {StyledSelect} from "./styled-select";
@@ -275,6 +277,7 @@ function Logo({ name = "NAOL",icon }: { name?: string;icon?:string|null }) {
 export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: Tab }) {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [currentUser, setCurrentUser] = useState("");
+  const [accountBadge,setAccountBadge]=useState<SupporterBadge|null>(null);
   const [accountPlan,setAccountPlan]=useState<'Free'|'Elite'|'Legend'|null>(null);
   const [currentGuild, setCurrentGuild] = useState<{ id: string; name: string; slug: string;icon?:string|null } | null>(null);
   const guildIdRef = useRef("");
@@ -312,10 +315,10 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
     }
   }, []);
   useEffect(() => {
-    fetch("/api/auth/status", { credentials: "same-origin", cache: "no-store" }).then(r => r.json() as Promise<{ authenticated: boolean; username?: string; plan?:'Free'|'Elite'|'Legend'; guild?: { id: string; name: string; slug: string } }>).then(data => {
+    fetch("/api/auth/status", { credentials: "same-origin", cache: "no-store" }).then(r => r.json() as Promise<{ authenticated: boolean; username?: string; plan?:'Free'|'Elite'|'Legend'; badge?:SupporterBadge|null; guild?: { id: string; name: string; slug: string } }>).then(data => {
       if (!data.authenticated) { window.location.replace("/login"); return; }
       if (!data.guild) { window.location.replace("/playgrounds"); return; }
-      guildIdRef.current = data.guild.id; setCurrentGuild(data.guild); setCurrentUser(data.username ?? "Manager"); setAccountPlan(data.plan??null); void load();
+      guildIdRef.current = data.guild.id; setCurrentGuild(data.guild); setCurrentUser(data.username ?? "Manager"); setAccountPlan(data.plan??null);setAccountBadge(data.badge??null); void load();
     }).catch(() => window.location.replace("/login"));
   }, [load]);
   useEffect(() => {
@@ -369,7 +372,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
         <div className="sidebar-top"><Logo name={currentGuild?.name} icon={currentGuild?.icon}/><button className="icon-button close-nav" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
         <PlaygroundSwitcher currentId={currentGuild?.id} disabled={saving||showRun||showSale}/><nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}</nav>
         <div className="sidebar-note"><Sparkles size={16} /><div><strong>Fair payout queue</strong><span>Oldest waiting member is shown first.</span></div></div>
-        <div className="sidebar-footer">{accountPlan==='Free'&&<PlanRequest sidebar currentPlan={accountPlan}/>}<a href="/guide"><Sparkles size={17}/><span>Help</span></a><a href="/account"><UserRound size={17}/><span>Account Settings</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>
+        <div className="sidebar-footer"><div className="sidebar-account-type">{accountBadge&&<SupporterEmblem badge={accountBadge}/>}<div><small>Your account</small><strong>{planLabel(accountPlan??undefined)}</strong>{accountBadge==='Supporter'&&<span>Supporter recognition</span>}</div></div>{accountPlan==='Free'&&<PlanRequest sidebar currentPlan={accountPlan}/>}<a href="/guide"><Sparkles size={17}/><span>Help</span></a><a href="/account"><UserRound size={17}/><span>Account Settings</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>
       </aside>
       {mobileNav && <button className="scrim" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
 
