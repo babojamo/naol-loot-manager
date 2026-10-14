@@ -21,6 +21,21 @@ assert.equal((await op('platform_supporter_save',admin,null,{userId:alice.id,gui
 assert.ok(!(await op('platform_supporter_save',admin,null,{userId:alice.id,guildId:id(100),published:true,badge:'Supporter',featured:true,featuredOrder:5}))._error);
 assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).featured,true);
 const featured=await op('supporters_featured');assert.equal(featured.length,1);assert.ok(!JSON.stringify(featured).includes(alice.email));
+// A supporter can showcase an actual manager membership, including both public surfaces.
+await db.exec('reset role;');await db.query("insert into public.loot_manager_guild_users(guild_id,user_id,role) values($1,$2,'manager')",[id(100),charlie.id]);await db.exec('set role service_role;');
+let managed=await op('platform_supporter_get',admin,null,{userId:charlie.id});assert.equal(managed.playgrounds[0].role,'manager');
+assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).playgrounds[0].role,'owner');
+assert.equal((await op('platform_supporter_save',admin,null,{userId:charlie.id,guildId:id(101),published:true,badge:'Supporter',featured:true}))._error.status,400);
+assert.ok(!(await op('platform_supporter_save',admin,null,{userId:charlie.id,guildId:id(100),published:true,badge:'Supporter',featured:true,featuredOrder:0}))._error);
+assert.equal((await op('supporters_featured'))[0].username,'user4');
+assert.ok((await op('supporters_list')).supporters.some(s=>s.username==='user4'));
+await op('platform_update',admin,null,{userId:alice.id,plan:'Free',overrides:{},banned:true});assert.equal((await op('supporters_featured')).length,0);
+await op('platform_update',admin,null,{userId:alice.id,plan:'Free',overrides:{},banned:false});assert.equal((await op('supporters_featured')).length,2);
+assert.ok(!(await op('team_remove',alice,id(100),{userId:charlie.id}))._error);
+assert.equal((await op('supporters_featured')).length,1);assert.ok(!(await op('supporters_list')).supporters.some(s=>s.username==='user4'));
+managed=await op('platform_supporter_get',admin,null,{userId:charlie.id});assert.equal(managed.guildId,null);assert.equal(managed.published,false);
+assert.ok(!(await op('platform_supporter_save',admin,null,{userId:charlie.id,guildId:null,published:false,badge:'Supporter',featured:false}))._error);
+await db.exec('reset role;set role authenticated;');await assert.rejects(()=>db.query('select public.loot_manager_showcase_eligible($1,$2)',[charlie.id,id(100)]));await db.exec('reset role;set role service_role;');
 assert.equal((await op('account_profile_check',alice,null,{username:'user3'}))._error.status,409);
 await db.exec('reset role;');
 await db.query(`update auth.users set raw_user_meta_data=$2,email=$3 where id=$1`,[alice.id,JSON.stringify({name:'Alice Renamed',username:'alice new!'}),'newalice@example.com']);
