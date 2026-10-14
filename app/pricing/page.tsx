@@ -1,1 +1,2 @@
-export {default,metadata} from '../plans/page';
+import {redirect} from 'next/navigation';
+export default function LegacyPlans(){redirect('/support');}
