@@ -62,7 +62,7 @@ export default defineConfig(async ({ command }) => {
         output: {
           // Bump the shared chunk signature after a deployment-time asset miss
           // so browsers do not reuse a cached failed dynamic import.
-          banner: "/* loot-manager-assets-v1 */",
+          banner: "/* loot-manager-assets-v2 */",
         },
       },
     },

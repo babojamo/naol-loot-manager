@@ -23,6 +23,17 @@ export default {
         },
       };
     }
-    return runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx));
+    return runWithConnectorBinding(binding, async () => {
+      const response = await handler.fetch(request, env, ctx);
+      // A transient asset miss during publication must never become a cached outage.
+      if (response.status === 404 && new URL(request.url).pathname.startsWith('/_next/static/')) {
+        const headers = new Headers(response.headers);
+        headers.set('Cache-Control', 'no-store, max-age=0');
+        headers.set('CDN-Cache-Control', 'no-store');
+        headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+        return new Response(response.body, {status: response.status, statusText: response.statusText, headers});
+      }
+      return response;
+    });
   },
 };
