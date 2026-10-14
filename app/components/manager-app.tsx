@@ -31,6 +31,7 @@ import {
   Store,
   Trash2,
   Users,
+  UserRound,
   X,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -368,7 +369,7 @@ export default function ManagerApp({ initialTab = "dashboard" }: { initialTab?: 
         <div className="sidebar-top"><Logo name={currentGuild?.name} icon={currentGuild?.icon}/><button className="icon-button close-nav" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
         <PlaygroundSwitcher currentId={currentGuild?.id} disabled={saving||showRun||showSale}/><nav>{nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => navigateToTab(item.id)}>{item.icon}<span>{item.label}</span></button>)}</nav>
         <div className="sidebar-note"><Sparkles size={16} /><div><strong>Fair payout queue</strong><span>Oldest waiting member is shown first.</span></div></div>
-        <div className="sidebar-footer">{accountPlan==='Free'&&<PlanRequest sidebar currentPlan={accountPlan}/>}<a href="/guide"><Sparkles size={17}/><span>Help</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>
+        <div className="sidebar-footer">{accountPlan==='Free'&&<PlanRequest sidebar currentPlan={accountPlan}/>}<a href="/guide"><Sparkles size={17}/><span>Help</span></a><a href="/account"><UserRound size={17}/><span>Account Settings</span></a><a href="/settings"><ShieldCheck size={17}/><span>Playground Settings</span></a><button className="signout" onClick={logout}><LogOut size={17} /> Sign out</button></div>
       </aside>
       {mobileNav && <button className="scrim" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
 
