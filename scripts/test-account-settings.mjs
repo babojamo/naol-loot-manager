@@ -30,6 +30,28 @@ assert.ok(!(await op('platform_supporter_save',admin,null,{userId:alice.id,guild
 assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).sidebarBadgeEnabled,false);
 assert.ok(!(await op('platform_supporter_save',admin,null,{userId:charlie.id,guildId:null,published:false,badge:'Elite Supporter',sidebarBadgeEnabled:true}))._error);
 assert.equal((await op('platform_supporter_get',admin,null,{userId:charlie.id})).sidebarBadgeEnabled,true);
+// The master switch overrides every display setting and preserves them for re-enabling.
+const showcaseSave={userId:alice.id,guildId:id(100),published:true,badge:'Supporter',featured:true,featuredOrder:5,sidebarBadgeEnabled:true};
+assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).showcaseEnabled,true);
+assert.equal((await op('platform_supporter_save',bob,null,{...showcaseSave,showcaseEnabled:false}))._error.status,403);
+assert.equal((await op('platform_supporter_save',admin,null,{...showcaseSave,showcaseEnabled:'false'}))._error.status,400);
+assert.ok(!(await op('platform_supporter_save',admin,null,{...showcaseSave,showcaseEnabled:false}))._error);
+let disabledShowcase=await op('platform_supporter_get',admin,null,{userId:alice.id});
+assert.equal(disabledShowcase.showcaseEnabled,false);assert.equal(disabledShowcase.published,true);assert.equal(disabledShowcase.featured,true);assert.equal(disabledShowcase.sidebarBadgeEnabled,true);
+assert.equal((await op('supporters_featured')).length,0);
+assert.equal((await op('supporters_list',null,null,{query:'user2',page:2})).total,0);
+assert.equal((await op('supporters_list')).supporters.length,0);
+assert.equal((await db.query('select badge from public.loot_manager_supporters where user_id=$1 and showcase_enabled and sidebar_badge_enabled',[alice.id])).rows.length,0);
+// Older clients must not accidentally re-enable a disabled showcase.
+assert.ok(!(await op('platform_supporter_save',admin,null,showcaseSave))._error);
+assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).showcaseEnabled,false);
+assert.ok(!(await op('platform_supporter_save',admin,null,{...showcaseSave,showcaseEnabled:true}))._error);
+assert.equal((await op('supporters_featured')).length,1);
+assert.equal((await op('supporters_list',null,null,{query:'user2'})).total,1);
+assert.equal((await db.query('select badge from public.loot_manager_supporters where user_id=$1 and showcase_enabled and sidebar_badge_enabled',[alice.id])).rows[0].badge,'Supporter');
+// The additive migration is safe to rerun without resetting account switches.
+await db.exec('reset role;');await db.exec(await readFile(new URL('../supabase/023_supporter_showcase_control.sql',import.meta.url),'utf8'));await db.exec('set role service_role;');
+assert.equal((await op('platform_supporter_get',admin,null,{userId:alice.id})).showcaseEnabled,true);
 const featured=await op('supporters_featured');assert.equal(featured.length,1);assert.ok(!JSON.stringify(featured).includes(alice.email));
 // A supporter can showcase an actual manager membership, including both public surfaces.
 await db.exec('reset role;');await db.query("insert into public.loot_manager_guild_users(guild_id,user_id,role) values($1,$2,'manager')",[id(100),charlie.id]);await db.exec('set role service_role;');

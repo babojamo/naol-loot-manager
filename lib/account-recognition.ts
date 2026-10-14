@@ -7,8 +7,8 @@ export async function accountRecognition(account:{id:string;plan:string}):Promis
   if(!secret||!env.NEXT_PUBLIC_SUPABASE_URL)return null;
   const client=createClient(env.NEXT_PUBLIC_SUPABASE_URL,secret,{auth:{persistSession:false,autoRefreshToken:false}});
   try{
-    const {data,error}=await client.from('loot_manager_supporters').select('badge,sidebar_badge_enabled').eq('user_id',account.id).abortSignal(AbortSignal.timeout(5000)).maybeSingle();
+    const {data,error}=await client.from('loot_manager_supporters').select('badge,sidebar_badge_enabled,showcase_enabled').eq('user_id',account.id).abortSignal(AbortSignal.timeout(5000)).maybeSingle();
     if(error)return null;
-    return data?.sidebar_badge_enabled===true&&['Supporter','Elite Supporter','Legend Supporter'].includes(data.badge)?data.badge as SupporterBadge:null;
+    return data?.showcase_enabled===true&&data.sidebar_badge_enabled===true&&['Supporter','Elite Supporter','Legend Supporter'].includes(data.badge)?data.badge as SupporterBadge:null;
   }catch{return null;}
 }

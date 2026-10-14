@@ -9,7 +9,7 @@ export async function GET(request:Request){return api(async()=>{
 export async function PUT(request:Request){return api(async()=>{
   checkMutation(request);
   const user=await identity();
-  const parsed=z.object({userId:z.string().uuid(),guildId:z.string().uuid().nullable(),published:z.boolean(),sidebarBadgeEnabled:z.boolean().optional(),featured:z.boolean().default(false),featuredOrder:z.number().int().min(0).max(999).default(0),badge:z.enum(['Supporter','Elite Supporter','Legend Supporter'])}).strict().safeParse(await request.json());
+  const parsed=z.object({userId:z.string().uuid(),guildId:z.string().uuid().nullable(),published:z.boolean(),showcaseEnabled:z.boolean().optional(),sidebarBadgeEnabled:z.boolean().optional(),featured:z.boolean().default(false),featuredOrder:z.number().int().min(0).max(999).default(0),badge:z.enum(['Supporter','Elite Supporter','Legend Supporter'])}).strict().safeParse(await request.json());
   if(!parsed.success||parsed.data.published&&!parsed.data.guildId)throw new ApiError(400,'Select an owned or managed playground before publishing.');
   return json(await database('platform_supporter_save',user,undefined,parsed.data));
 },request);}
